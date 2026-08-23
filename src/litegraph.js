@@ -3650,7 +3650,7 @@
      * @method addConnection
      * @param {string} name
      * @param {string} type string defining the input type ("vec3","number",...)
-     * @param {[x,y]} pos position of the connection inside the node
+     * @param {number[]} pos position of the connection inside the node
      * @param {string} direction if is input or output
      */
     LGraphNode.prototype.addConnection = function(name, type, pos, direction) {
@@ -3873,9 +3873,9 @@
     /**
      * returns the bounding of the object, used for rendering purposes
      * @method getBounding
-     * @param out {Float32Array[4]?} [optional] a place to store the output, to free garbage
+     * @param {Float32Array} [out] a place to store the output, to free garbage
      * @param compute_outer {boolean?} [optional] set to true to include the shadow and connection points in the bounding calculation
-     * @return {Float32Array[4]} the bounding box in format of [topleft_cornerx, topleft_cornery, width, height]
+     * @return {Float32Array} the bounding box in format of [topleft_cornerx, topleft_cornery, width, height]
      */
     LGraphNode.prototype.getBounding = function(out, compute_outer) {
         out = out || new Float32Array(4);
@@ -4749,7 +4749,7 @@
      * @param {boolean} is_input true if if a input slot, false if it is an output
      * @param {number_or_string} slot (could be the number of the slot or the string with the name of the slot)
      * @param {vec2} out [optional] a place to store the output, to free garbage
-     * @return {[x,y]} the position
+     * @return {number[]} the position
      **/
     LGraphNode.prototype.getConnectionPos = function(
         is_input,
@@ -14421,4 +14421,3 @@ if (typeof exports != "undefined") {
     exports.LGraphCanvas = this.LGraphCanvas;
     exports.ContextMenu = this.ContextMenu;
 }
-
