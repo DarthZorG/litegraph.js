@@ -1,5 +1,5 @@
 //basic nodes
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
     function toString(a) {

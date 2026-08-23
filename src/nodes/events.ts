@@ -1,5 +1,5 @@
 //event related nodes
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
     //Show value inside the debug console

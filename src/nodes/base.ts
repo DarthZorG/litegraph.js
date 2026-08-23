@@ -1,5 +1,5 @@
 //basic nodes
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
     //Constant
@@ -360,9 +360,9 @@
         // Recurse!
         for (const node of graph.nodes) {
             if (node.type === "graph/subgraph") {
-                const merge = reassignGraphUUIDs(node.subgraph);
-                idMap.nodeIDs.assign(merge.nodeIDs)
-                idMap.linkIDs.assign(merge.linkIDs)
+                const merge = this.reassignSubgraphUUIDs(node.subgraph);
+                Object.assign(idMap.nodeIDs, merge.nodeIDs)
+                Object.assign(idMap.linkIDs, merge.linkIDs)
             }
         }
     };
@@ -1119,7 +1119,7 @@
             that.boxcolor = "#AEA";
 			var v = e.target.result;
 			if( that.properties.type == "json" )
-				v = JSON.parse(v);
+				v = JSON.parse(v as string);
 			that._data = v;
 		}
 		if(that.properties.type == "arraybuffer")
@@ -1521,12 +1521,6 @@ LiteGraph.registerNodeType("basic/jsonparse", JSONParse);
         [""],
         "number"
     );
-
-    function length(v) {
-        if(v && v.length != null)
-			return Number(v.length);
-		return 0;
-    }
 
     LiteGraph.wrapFunctionAsNode(
         "basic/not",

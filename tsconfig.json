@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "none",
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

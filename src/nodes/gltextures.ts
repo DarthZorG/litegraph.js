@@ -1,4 +1,4 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 	var LGraphCanvas = global.LGraphCanvas;
 
@@ -129,7 +129,7 @@
 		return target;
 	};
 
-	LGraphTexture.getTextureType = function(precision, ref_texture) {
+	LGraphTexture.getTextureType = function(precision, ref_texture?) {
 		var type = ref_texture ? ref_texture.type : gl.UNSIGNED_BYTE;
 		switch (precision) {
 			case LGraphTexture.HIGH:
@@ -468,8 +468,8 @@
 
 		if (this.properties.name) {
 			//for cases where we want to perform something when storing it
-			if (LGraphTexture.storeTexture) {
-				LGraphTexture.storeTexture(this.properties.name, tex);
+			if ((LGraphTexture as any).storeTexture) {
+				(LGraphTexture as any).storeTexture(this.properties.name, tex);
 			} else {
 				var container = LGraphTexture.getTexturesContainer();
 				container[this.properties.name] = tex;
@@ -806,18 +806,18 @@
 		}
 
 		//update existing ones
-		for (var i in uniforms) {
-			var info = shader.uniformInfo[i];
+		for (const uniformName in uniforms) {
+			var info = shader.uniformInfo[uniformName];
 			if (info.loc === null) {
 				continue;
 			} //is an attribute, not a uniform
-			if (i == "time") {
+			if (uniformName == "time") {
 				//default one
 				continue;
 			}
 
 			var type = "number";
-			if (this._shader.samplers[i]) {
+			if (this._shader.samplers[uniformName]) {
 				type = "texture";
 			} else {
 				switch (info.size) {
@@ -844,21 +844,21 @@
 				}
 			}
 
-			var slot = this.findInputSlot(i);
+			var slot = this.findInputSlot(uniformName);
 			if (slot == -1) {
-				this.addInput(i, type);
+				this.addInput(uniformName, type);
 				continue;
 			}
 
 			var input_info = this.getInputInfo(slot);
 			if (!input_info) {
-				this.addInput(i, type);
+				this.addInput(uniformName, type);
 			} else {
 				if (input_info.type == type) {
 					continue;
 				}
 				this.removeInput(slot, type);
-				this.addInput(i, type);
+				this.addInput(uniformName, type);
 			}
 		}
 	};
@@ -1231,7 +1231,7 @@ void main() {\n\
 	LGraphTextureToViewport.title = "to Viewport";
 	LGraphTextureToViewport.desc = "Texture to viewport";
 
-	LGraphTextureToViewport._prev_viewport = new Float32Array(4);
+	(LGraphTextureToViewport as any)._prev_viewport = new Float32Array(4);
 
 	LGraphTextureToViewport.prototype.onDrawBackground = function( ctx )
 	{
@@ -1274,15 +1274,15 @@ void main() {\n\
 			this.properties.filter ? gl.LINEAR : gl.NEAREST
 		);
 
-		var old_viewport = LGraphTextureToViewport._prev_viewport;
+		var old_viewport = (LGraphTextureToViewport as any)._prev_viewport;
 		old_viewport.set( gl.viewport_data );
 		var new_view = this.properties.viewport;
 		gl.viewport( old_viewport[0] + old_viewport[2] * new_view[0], old_viewport[1] + old_viewport[3] * new_view[1], old_viewport[2] * new_view[2], old_viewport[3] * new_view[3] );
 		var viewport = gl.getViewport(); //gl.getParameter(gl.VIEWPORT);
 
 		if (this.properties.antialiasing) {
-			if (!LGraphTextureToViewport._shader) {
-				LGraphTextureToViewport._shader = new GL.Shader(
+			if (!(LGraphTextureToViewport as any)._shader) {
+				(LGraphTextureToViewport as any)._shader = new GL.Shader(
 					GL.Shader.SCREEN_VERTEX_SHADER,
 					LGraphTextureToViewport.aa_pixel_shader
 				);
@@ -1290,7 +1290,7 @@ void main() {\n\
 
 			var mesh = Mesh.getScreenQuad();
 			tex.bind(0);
-			LGraphTextureToViewport._shader
+			(LGraphTextureToViewport as any)._shader
 				.uniforms({
 					u_texture: 0,
 					uViewportSize: [tex.width, tex.height],
@@ -1300,13 +1300,13 @@ void main() {\n\
 				.draw(mesh);
 		} else {
 			if (gamma != 1.0) {
-				if (!LGraphTextureToViewport._gamma_shader) {
-					LGraphTextureToViewport._gamma_shader = new GL.Shader(
+				if (!(LGraphTextureToViewport as any)._gamma_shader) {
+					(LGraphTextureToViewport as any)._gamma_shader = new GL.Shader(
 						Shader.SCREEN_VERTEX_SHADER,
 						LGraphTextureToViewport.gamma_pixel_shader
 					);
 				}
-				tex.toViewport(LGraphTextureToViewport._gamma_shader, {
+				tex.toViewport((LGraphTextureToViewport as any)._gamma_shader, {
 					u_texture: 0,
 					u_igamma: 1 / gamma
 				});
@@ -1524,9 +1524,9 @@ void main() {\n\
 			return;
 		}
 
-		var shader = LGraphTextureDownsample._shader;
+		var shader = (LGraphTextureDownsample as any)._shader;
 		if (!shader) {
-			LGraphTextureDownsample._shader = shader = new GL.Shader(
+			(LGraphTextureDownsample as any)._shader = shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureDownsample.pixel_shader
 			);
@@ -1728,8 +1728,8 @@ void main() {\n\
 			return;
 		} //saves work
 
-		if (!LGraphTextureAverage._shader) {
-			LGraphTextureAverage._shader = new GL.Shader(
+		if (!(LGraphTextureAverage as any)._shader) {
+			(LGraphTextureAverage as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureAverage.pixel_shader
 			);
@@ -1739,7 +1739,7 @@ void main() {\n\
 				samples[i] = Math.random(); //poorly distributed samples
 			}
 			//upload only once
-			LGraphTextureAverage._shader.uniforms({
+			(LGraphTextureAverage as any)._shader.uniforms({
 				u_samples_a: samples.subarray(0, 16),
 				u_samples_b: samples.subarray(16, 32)
 			});
@@ -1779,7 +1779,7 @@ void main() {\n\
 			this._uniforms.u_mipmap_offset = 9;
 		}
 
-		var shader = LGraphTextureAverage._shader;
+		var shader = (LGraphTextureAverage as any)._shader;
 		var uniforms = this._uniforms;
 		uniforms.u_mipmap_offset = this.properties.mipmap_offset;
 		gl.disable(gl.DEPTH_TEST);
@@ -1885,8 +1885,8 @@ void main() {\n\
 			return;
 		} //saves work
 
-		if (!LGraphTextureMinMax._shader) {
-			LGraphTextureMinMax._shader = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureMinMax.pixel_shader );
+		if (!(LGraphTextureMinMax as any)._shader) {
+			(LGraphTextureMinMax as any)._shader = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureMinMax.pixel_shader );
 		}
 
 		var temp = this._temp_texture;
@@ -1924,7 +1924,7 @@ void main() {\n\
 			prev = tex;				
 		}
 
-		var shader = LGraphTextureMinMax._shader;
+		var shader = (LGraphTextureMinMax as any)._shader;
 		var uniforms = this._uniforms;
 		uniforms.u_mipmap_offset = this.properties.mipmap_offset;
 		gl.disable(gl.DEPTH_TEST);
@@ -1980,8 +1980,8 @@ void main() {\n\
 			return;
 		}
 
-		if (!LGraphTextureTemporalSmooth._shader) {
-			LGraphTextureTemporalSmooth._shader = new GL.Shader(
+		if (!(LGraphTextureTemporalSmooth as any)._shader) {
+			(LGraphTextureTemporalSmooth as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureTemporalSmooth.pixel_shader
 			);
@@ -2007,7 +2007,7 @@ void main() {\n\
 		var tempA = this._temp_texture;
 		var tempB = this._temp_texture2;
 
-		var shader = LGraphTextureTemporalSmooth._shader;
+		var shader = (LGraphTextureTemporalSmooth as any)._shader;
 		var uniforms = this._uniforms;
 		uniforms.u_factor = 1.0 - this.getInputOrProperty("factor");
 
@@ -2072,9 +2072,9 @@ void main() {\n\
 			return;
 		}
 
-		if (!LGraphTextureLinearAvgSmooth._shader) {
-			LGraphTextureLinearAvgSmooth._shader_copy = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureLinearAvgSmooth.pixel_shader_copy );
-			LGraphTextureLinearAvgSmooth._shader_avg = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureLinearAvgSmooth.pixel_shader_avg );
+		if (!(LGraphTextureLinearAvgSmooth as any)._shader) {
+			(LGraphTextureLinearAvgSmooth as any)._shader_copy = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureLinearAvgSmooth.pixel_shader_copy );
+			(LGraphTextureLinearAvgSmooth as any)._shader_avg = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureLinearAvgSmooth.pixel_shader_avg );
 		}
 
 		var samples = clamp(this.properties.samples,0,64);
@@ -2098,8 +2098,8 @@ void main() {\n\
 			var tempA = this._temp_texture;
 			var tempB = this._temp_texture2;
 
-			var shader_copy = LGraphTextureLinearAvgSmooth._shader_copy;
-			var shader_avg = LGraphTextureLinearAvgSmooth._shader_avg;
+			var shader_copy = (LGraphTextureLinearAvgSmooth as any)._shader_copy;
+			var shader_avg = (LGraphTextureLinearAvgSmooth as any)._shader_avg;
 			var uniforms = this._uniforms;
 			uniforms.u_samples = samples;
 			uniforms.u_isamples = 1.0 / samples;
@@ -2226,8 +2226,8 @@ void main() {\n\
 		this.addOutput("", "Texture");
 		this.properties = { enabled: true, intensity: 1, precision: LGraphTexture.DEFAULT, texture: null };
 
-		if (!LGraphTextureLUT._shader) {
-			LGraphTextureLUT._shader = new GL.Shader( Shader.SCREEN_VERTEX_SHADER, LGraphTextureLUT.pixel_shader );
+		if (!(LGraphTextureLUT as any)._shader) {
+			(LGraphTextureLUT as any)._shader = new GL.Shader( Shader.SCREEN_VERTEX_SHADER, LGraphTextureLUT.pixel_shader );
 		}
 	}
 
@@ -2295,7 +2295,7 @@ void main() {\n\
 
 		this._tex.drawTo(function() {
 			lut_tex.bind(1);
-			tex.toViewport(LGraphTextureLUT._shader, {
+			tex.toViewport((LGraphTextureLUT as any)._shader, {
 				u_texture: 0,
 				u_textureB: 1,
 				u_amount: intensity
@@ -2345,8 +2345,8 @@ void main() {\n\
 		this.addOutput("", "Texture");
 		this.properties = { enabled: true, num_row_symbols: 4, symbol_size: 16, brightness: 1, colorize: false, filter: false, invert: false, precision: LGraphTexture.DEFAULT, generate_mipmaps: false, texture: null };
 
-		if (!LGraphTextureEncode._shader) {
-			LGraphTextureEncode._shader = new GL.Shader( Shader.SCREEN_VERTEX_SHADER, LGraphTextureEncode.pixel_shader );
+		if (!(LGraphTextureEncode as any)._shader) {
+			(LGraphTextureEncode as any)._shader = new GL.Shader( Shader.SCREEN_VERTEX_SHADER, LGraphTextureEncode.pixel_shader );
 		}
 
 		this._uniforms = {
@@ -2416,7 +2416,7 @@ void main() {\n\
 
 		this._tex.drawTo(function() {
 			symbols_tex.bind(1);
-			tex.toViewport(LGraphTextureEncode._shader, uniforms);
+			tex.toViewport((LGraphTextureEncode as any)._shader, uniforms);
 		});
 
 		if (this.properties.generate_mipmaps) {
@@ -2471,8 +2471,8 @@ void main() {\n\
 		this.addOutput("A", "Texture");
 
 		//this.properties = { use_single_channel: true };
-		if (!LGraphTextureChannels._shader) {
-			LGraphTextureChannels._shader = new GL.Shader(
+		if (!(LGraphTextureChannels as any)._shader) {
+			(LGraphTextureChannels as any)._shader = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureChannels.pixel_shader
 			);
@@ -2528,7 +2528,7 @@ void main() {\n\
 		gl.disable(gl.DEPTH_TEST);
 
 		var mesh = Mesh.getScreenQuad();
-		var shader = LGraphTextureChannels._shader;
+		var shader = (LGraphTextureChannels as any)._shader;
 		var masks = [
 			[1, 0, 0, 0],
 			[0, 1, 0, 0],
@@ -2611,13 +2611,13 @@ void main() {\n\
 		gl.disable(gl.DEPTH_TEST);
 
 		var mesh = Mesh.getScreenQuad();
-		if (!LGraphChannelsTexture._shader) {
-			LGraphChannelsTexture._shader = new GL.Shader(
+		if (!(LGraphChannelsTexture as any)._shader) {
+			(LGraphChannelsTexture as any)._shader = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphChannelsTexture.pixel_shader
 			);
 		}
-		var shader = LGraphChannelsTexture._shader;
+		var shader = (LGraphChannelsTexture as any)._shader;
 
 		var w = Math.max(texR.width, texG.width, texB.width, texA.width);
 		var h = Math.max(
@@ -2628,7 +2628,7 @@ void main() {\n\
 		);
 		var type =
 			this.properties.precision == LGraphTexture.HIGH
-				? LGraphTexture.HIGH_PRECISION_FORMAT
+				? (LGraphTexture as any).HIGH_PRECISION_FORMAT
 				: gl.UNSIGNED_BYTE;
 
 		if (
@@ -2724,7 +2724,7 @@ void main() {\n\
 	LGraphTextureColor.prototype.onExecute = function() {
 		var type =
 			this.properties.precision == LGraphTexture.HIGH
-				? LGraphTexture.HIGH_PRECISION_FORMAT
+				? (LGraphTexture as any).HIGH_PRECISION_FORMAT
 				: gl.UNSIGNED_BYTE;
 
 		if (!this._tex || this._tex.type != type) {
@@ -2797,8 +2797,8 @@ void main() {\n\
 			B: [1, 1, 1],
 			texture_size: 32
 		};
-		if (!LGraphTextureGradient._shader) {
-			LGraphTextureGradient._shader = new GL.Shader(
+		if (!(LGraphTextureGradient as any)._shader) {
+			(LGraphTextureGradient as any)._shader = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureGradient.pixel_shader
 			);
@@ -2825,7 +2825,7 @@ void main() {\n\
 		gl.disable(gl.DEPTH_TEST);
 
 		var mesh = GL.Mesh.getScreenQuad();
-		var shader = LGraphTextureGradient._shader;
+		var shader = (LGraphTextureGradient as any)._shader;
 
 		var A = this.getInputData(0);
 		if (!A) {
@@ -2954,18 +2954,18 @@ void main() {\n\
 		var shader = null;
 		var uniforms = this._uniforms;
 		if (texMix) {
-			shader = LGraphTextureMix._shader_tex;
+			shader = (LGraphTextureMix as any)._shader_tex;
 			if (!shader) {
-				shader = LGraphTextureMix._shader_tex = new GL.Shader(
+				shader = (LGraphTextureMix as any)._shader_tex = new GL.Shader(
 					Shader.SCREEN_VERTEX_SHADER,
 					LGraphTextureMix.pixel_shader,
 					{ MIX_TEX: "" }
 				);
 			}
 		} else {
-			shader = LGraphTextureMix._shader_factor;
+			shader = (LGraphTextureMix as any)._shader_factor;
 			if (!shader) {
-				shader = LGraphTextureMix._shader_factor = new GL.Shader(
+				shader = (LGraphTextureMix as any)._shader_factor = new GL.Shader(
 					Shader.SCREEN_VERTEX_SHADER,
 					LGraphTextureMix.pixel_shader
 				);
@@ -3028,8 +3028,8 @@ void main() {\n\
 			precision: LGraphTexture.DEFAULT
 		};
 
-		if (!LGraphTextureEdges._shader) {
-			LGraphTextureEdges._shader = new GL.Shader(
+		if (!(LGraphTextureEdges as any)._shader) {
+			(LGraphTextureEdges as any)._shader = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureEdges.pixel_shader
 			);
@@ -3069,7 +3069,7 @@ void main() {\n\
 		gl.disable(gl.DEPTH_TEST);
 
 		var mesh = Mesh.getScreenQuad();
-		var shader = LGraphTextureEdges._shader;
+		var shader = (LGraphTextureEdges as any)._shader;
 		var invert = this.properties.invert;
 		var factor = this.properties.factor;
 		var threshold = this.properties.threshold ? 1 : 0;
@@ -3191,20 +3191,20 @@ void main() {\n\
 		gl.disable(gl.BLEND);
 		gl.disable(gl.DEPTH_TEST);
 		var mesh = Mesh.getScreenQuad();
-		if (!LGraphTextureDepthRange._shader) {
-			LGraphTextureDepthRange._shader = new GL.Shader(
+		if (!(LGraphTextureDepthRange as any)._shader) {
+			(LGraphTextureDepthRange as any)._shader = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureDepthRange.pixel_shader
 			);
-			LGraphTextureDepthRange._shader_onlydepth = new GL.Shader(
+			(LGraphTextureDepthRange as any)._shader_onlydepth = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureDepthRange.pixel_shader,
 				{ ONLY_DEPTH: "" }
 			);
 		}
 		var shader = this.properties.only_depth
-			? LGraphTextureDepthRange._shader_onlydepth
-			: LGraphTextureDepthRange._shader;
+			? (LGraphTextureDepthRange as any)._shader_onlydepth
+			: (LGraphTextureDepthRange as any)._shader;
 
 		//NEAR AND FAR PLANES
 		var planes = null;
@@ -3309,9 +3309,9 @@ void main() {\n\
 		gl.disable(gl.BLEND);
 		gl.disable(gl.DEPTH_TEST);
 		var mesh = Mesh.getScreenQuad();
-		if(!LGraphTextureLinearDepth._shader)
-			LGraphTextureLinearDepth._shader = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureLinearDepth.pixel_shader);
-		var shader = LGraphTextureLinearDepth._shader;
+		if(!(LGraphTextureLinearDepth as any)._shader)
+			(LGraphTextureLinearDepth as any)._shader = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureLinearDepth.pixel_shader);
+		var shader = (LGraphTextureLinearDepth as any)._shader;
 
 		//NEAR AND FAR PLANES
 		var planes = null;
@@ -3519,9 +3519,9 @@ LGraphTextureBlur.pixel_shader = "precision highp float;\n\
 		var textures = this._textures;
 
 		//cut
-		var shader = FXGlow._cut_shader;
+		var shader = (FXGlow as any)._cut_shader;
 		if (!shader) {
-			shader = FXGlow._cut_shader = new GL.Shader(
+			shader = (FXGlow as any)._cut_shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				FXGlow.cut_pixel_shader
 			);
@@ -3548,9 +3548,9 @@ LGraphTextureBlur.pixel_shader = "precision highp float;\n\
 		uniforms.u_delta = this.scale; //1
 
 		//downscale/upscale shader
-		var shader = FXGlow._shader;
+		var shader = (FXGlow as any)._shader;
 		if (!shader) {
-			shader = FXGlow._shader = new GL.Shader(
+			shader = (FXGlow as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				FXGlow.scale_pixel_shader
 			);
@@ -3624,17 +3624,17 @@ LGraphTextureBlur.pixel_shader = "precision highp float;\n\
 			uniforms.u_intensity = intensity;
 
 			shader = dirt_texture
-				? FXGlow._dirt_final_shader
-				: FXGlow._final_shader;
+				? (FXGlow as any)._dirt_final_shader
+				: (FXGlow as any)._final_shader;
 			if (!shader) {
 				if (dirt_texture) {
-					shader = FXGlow._dirt_final_shader = new GL.Shader(
+					shader = (FXGlow as any)._dirt_final_shader = new GL.Shader(
 						GL.Shader.SCREEN_VERTEX_SHADER,
 						FXGlow.final_pixel_shader,
 						{ USE_DIRT: "" }
 					);
 				} else {
-					shader = FXGlow._final_shader = new GL.Shader(
+					shader = (FXGlow as any)._final_shader = new GL.Shader(
 						GL.Shader.SCREEN_VERTEX_SHADER,
 						FXGlow.final_pixel_shader
 					);
@@ -3883,7 +3883,7 @@ LGraphTextureBlur.pixel_shader = "precision highp float;\n\
 		"Filters a texture giving an artistic oil canvas painting";
 
 	LGraphTextureKuwaharaFilter.max_radius = 10;
-	LGraphTextureKuwaharaFilter._shaders = [];
+	(LGraphTextureKuwaharaFilter as any)._shaders = [];
 
 	LGraphTextureKuwaharaFilter.prototype.onExecute = function() {
 		var tex = this.getInputData(0);
@@ -3934,15 +3934,15 @@ LGraphTextureBlur.pixel_shader = "precision highp float;\n\
 		}
 		aspect = this.properties.preserve_aspect ? aspect : 1;
 
-		if (!LGraphTextureKuwaharaFilter._shaders[radius]) {
-			LGraphTextureKuwaharaFilter._shaders[radius] = new GL.Shader(
+		if (!(LGraphTextureKuwaharaFilter as any)._shaders[radius]) {
+			(LGraphTextureKuwaharaFilter as any)._shaders[radius] = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureKuwaharaFilter.pixel_shader,
 				{ RADIUS: radius.toFixed(0) }
 			);
 		}
 
-		var shader = LGraphTextureKuwaharaFilter._shaders[radius];
+		var shader = (LGraphTextureKuwaharaFilter as any)._shaders[radius];
 		var mesh = GL.Mesh.getScreenQuad();
 		tex.bind(0);
 
@@ -4079,7 +4079,7 @@ void main() {\n\
 		"Filters a texture giving an artistic ink style";
 
 	LGraphTextureXDoGFilter.max_radius = 10;
-	LGraphTextureXDoGFilter._shaders = [];
+	(LGraphTextureXDoGFilter as any)._shaders = [];
 
 	LGraphTextureXDoGFilter.prototype.onExecute = function() {
 		var tex = this.getInputData(0);
@@ -4105,13 +4105,13 @@ void main() {\n\
 			});
 		}
 
-		if (!LGraphTextureXDoGFilter._xdog_shader) {
-			LGraphTextureXDoGFilter._xdog_shader = new GL.Shader(
+		if (!(LGraphTextureXDoGFilter as any)._xdog_shader) {
+			(LGraphTextureXDoGFilter as any)._xdog_shader = new GL.Shader(
 				Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureXDoGFilter.xdog_pixel_shader
 			);
 		}
-		var shader = LGraphTextureXDoGFilter._xdog_shader;
+		var shader = (LGraphTextureXDoGFilter as any)._xdog_shader;
 		var mesh = GL.Mesh.getScreenQuad();
 
 		var sigma = this.properties.sigma;
@@ -4447,9 +4447,9 @@ void main(void){\n\
 			);
 		}
 
-		var shader = LGraphLensFX._shader;
+		var shader = (LGraphLensFX as any)._shader;
 		if (!shader) {
-			shader = LGraphLensFX._shader = new GL.Shader(
+			shader = (LGraphLensFX as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphLensFX.pixel_shader
 			);
@@ -4627,9 +4627,9 @@ void main(void){\n\
 		if ( !temp || temp.type != type || temp.width != tex.width || temp.height != tex.height || temp.format != tex.format)
 			temp = this._temp_texture = new GL.Texture( tex.width, tex.height, { type: type, format: tex.format, filter: gl.LINEAR } );
 
-		var shader = LGraphTextureCurve._shader;
+		var shader = (LGraphTextureCurve as any)._shader;
 		if (!shader) {
-			shader = LGraphTextureCurve._shader = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureCurve.pixel_shader );
+			shader = (LGraphTextureCurve as any)._shader = new GL.Shader( GL.Shader.SCREEN_VERTEX_SHADER, LGraphTextureCurve.pixel_shader );
 		}
 
 		if(this._must_update || !this._curve_texture )
@@ -4833,9 +4833,9 @@ void main(void){\n\
 			);
 		}
 
-		var shader = LGraphExposition._shader;
+		var shader = (LGraphExposition as any)._shader;
 		if (!shader) {
-			shader = LGraphExposition._shader = new GL.Shader(
+			shader = (LGraphExposition as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphExposition.pixel_shader
 			);
@@ -4949,18 +4949,18 @@ void main(void){\n\
 		if (avg.constructor === Number) {
 			this.properties.average_lum = avg;
 			uniforms.u_average_lum = this.properties.average_lum;
-			shader = LGraphToneMapping._shader;
+			shader = (LGraphToneMapping as any)._shader;
 			if (!shader) {
-				shader = LGraphToneMapping._shader = new GL.Shader(
+				shader = (LGraphToneMapping as any)._shader = new GL.Shader(
 					GL.Shader.SCREEN_VERTEX_SHADER,
 					LGraphToneMapping.pixel_shader
 				);
 			}
 		} else if (avg.constructor === GL.Texture) {
 			uniforms.u_average_texture = avg.bind(1);
-			shader = LGraphToneMapping._shader_texture;
+			shader = (LGraphToneMapping as any)._shader_texture;
 			if (!shader) {
-				shader = LGraphToneMapping._shader_texture = new GL.Shader(
+				shader = (LGraphToneMapping as any)._shader_texture = new GL.Shader(
 					GL.Shader.SCREEN_VERTEX_SHADER,
 					LGraphToneMapping.pixel_shader,
 					{ AVG_TEXTURE: "" }
@@ -5147,9 +5147,9 @@ void main(void){\n\
 		uniforms.u_viewport[1] = h;
 
 		//render
-		var shader = LGraphTexturePerlin._shader;
+		var shader = (LGraphTexturePerlin as any)._shader;
 		if (!shader) {
-			shader = LGraphTexturePerlin._shader = new GL.Shader(
+			shader = (LGraphTexturePerlin as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphTexturePerlin.pixel_shader
 			);
@@ -5421,9 +5421,9 @@ void main(void){\n\
 		var uniforms = this._uniforms;
 
 		var mesh = Mesh.getScreenQuad();
-		var shader = LGraphTextureMatte._shader;
+		var shader = (LGraphTextureMatte as any)._shader;
 		if (!shader) {
-			shader = LGraphTextureMatte._shader = new GL.Shader(
+			shader = (LGraphTextureMatte as any)._shader = new GL.Shader(
 				GL.Shader.SCREEN_VERTEX_SHADER,
 				LGraphTextureMatte.pixel_shader
 			);

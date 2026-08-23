@@ -3,8 +3,11 @@ const path = require("path");
 
 function loadLiteGraphWithBaseNodes() {
     jest.resetModules();
-    const litegraph = require("../litegraph");
-    const source = fs.readFileSync(path.join(__dirname, "base.js"), "utf8");
+    const litegraph = require("../../build/src/litegraph");
+    const source = fs.readFileSync(
+        path.join(__dirname, "../../build/src/nodes/base.js"),
+        "utf8"
+    );
     Function(source).call({ LiteGraph: litegraph.LiteGraph });
     return litegraph;
 }

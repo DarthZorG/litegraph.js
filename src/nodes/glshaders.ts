@@ -1,4 +1,4 @@
-(function(global) {
+(function(global: any) {
 
     if (typeof GL == "undefined")
 		return;
@@ -8,7 +8,7 @@
 
 	var SHADERNODES_COLOR = "#345";
 
-	var LGShaders = LiteGraph.Shaders = {};
+	var LGShaders: any = LiteGraph.Shaders = {};
 
 	var GLSL_types = LGShaders.GLSL_types = ["float","vec2","vec3","vec4","mat3","mat4","sampler2D","samplerCube"];
 	var GLSL_types_const = LGShaders.GLSL_types_const = ["float","vec2","vec3","vec4"];
@@ -144,7 +144,7 @@
 		LiteGraph.registerNodeType( "shader::" + type, node_ctor );
 	}
 
-	function getShaderNodeVarName( node, name )
+	function getShaderNodeVarName( node, name? )
 	{
 		return "VAR_" + (name || "TEMP") + "_" + node.id;
 	}
@@ -179,7 +179,7 @@
 	LGShaders.parseGLSLDescriptions = parseGLSLDescriptions;
 
 	//given a const number, it transform it to a string that matches a type
-	var valueToGLSL = LiteGraph.valueToGLSL = function valueToGLSL( v, type, precision )
+	var valueToGLSL = LiteGraph.valueToGLSL = function valueToGLSL( v, type?, precision? )
 	{
 		var n = 5; //num decimals
 		if(precision != null)
@@ -215,7 +215,7 @@
 			case 'mat3': return "mat3(1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0)"; break; //not fully supported yet
 			case 'mat4': return "mat4(1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0)"; break;//not fully supported yet
 			default:
-				throw("unknown glsl type in valueToGLSL:", type);
+				throw("unknown glsl type in valueToGLSL: " + type);
 		}
 
 		return "";
@@ -1297,7 +1297,7 @@ gl_FragColor = fragcolor;\n\
 			var param_code = inlinks[i].name;
 			if(param_code == null) //not plugged
 			{
-				param_code = p.value != null ? p.value : "(1.0)";
+				param_code = "(1.0)";
 				inlinks[i].type = "float";
 			}
 

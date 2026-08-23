@@ -1,7 +1,7 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
-    var LGAudio = {};
+    var LGAudio: any = {};
     global.LGAudio = LGAudio;
 
     LGAudio.getAudioContext = function() {
@@ -1299,21 +1299,21 @@ LiteGraph.registerNodeType("audio/waveShaper", LGAudioWaveShaper);
         var samplerate = LGAudio.getAudioContext().sampleRate;
         var binfreq = samplerate / this._freqs.length;
         var index = 2 * (band / binfreq);
-        var v = 0;
+        var signal = 0;
         if (index < 0) {
-            v = this._freqs[0];
+            signal = this._freqs[0];
         }
         if (index >= this._freqs.length) {
-            v = this._freqs[this._freqs.length - 1];
+            signal = this._freqs[this._freqs.length - 1];
         } else {
             var pos = index | 0;
             var v0 = this._freqs[pos];
             var v1 = this._freqs[pos + 1];
             var f = index - pos;
-            v = v0 * (1 - f) + v1 * f;
+            signal = v0 * (1 - f) + v1 * f;
         }
 
-        this.setOutputData(0, (v / 255) * this.properties.amplitude);
+        this.setOutputData(0, (signal / 255) * this.properties.amplitude);
     };
 
     LGAudioBandSignal.prototype.onGetInputs = function() {
@@ -1325,16 +1325,16 @@ LiteGraph.registerNodeType("audio/waveShaper", LGAudioWaveShaper);
     LiteGraph.registerNodeType("audio/signal", LGAudioBandSignal);
 
     function LGAudioScript() {
-        if (!LGAudioScript.default_code) {
+        if (!(LGAudioScript as any).default_code) {
             var code = LGAudioScript.default_function.toString();
             var index = code.indexOf("{") + 1;
             var index2 = code.lastIndexOf("}");
-            LGAudioScript.default_code = code.substr(index, index2 - index);
+            (LGAudioScript as any).default_code = code.substr(index, index2 - index);
         }
 
         //default
         this.properties = {
-            code: LGAudioScript.default_code
+            code: (LGAudioScript as any).default_code
         };
 
         //create node
@@ -1349,8 +1349,8 @@ LiteGraph.registerNodeType("audio/waveShaper", LGAudioWaveShaper);
         }
 
         this.processCode();
-        if (!LGAudioScript._bypass_function) {
-            LGAudioScript._bypass_function = this.audionode.onaudioprocess;
+        if (!(LGAudioScript as any)._bypass_function) {
+            (LGAudioScript as any)._bypass_function = this.audionode.onaudioprocess;
         }
 
         //slots
@@ -1371,11 +1371,11 @@ LiteGraph.registerNodeType("audio/waveShaper", LGAudioWaveShaper);
     };
 
     LGAudioScript.prototype.onStop = function() {
-        this.audionode.onaudioprocess = LGAudioScript._bypass_function;
+        this.audionode.onaudioprocess = (LGAudioScript as any)._bypass_function;
     };
 
     LGAudioScript.prototype.onPause = function() {
-        this.audionode.onaudioprocess = LGAudioScript._bypass_function;
+        this.audionode.onaudioprocess = (LGAudioScript as any)._bypass_function;
     };
 
     LGAudioScript.prototype.onUnpause = function() {
@@ -1387,18 +1387,19 @@ LiteGraph.registerNodeType("audio/waveShaper", LGAudioWaveShaper);
     };
 
     LGAudioScript.prototype.onRemoved = function() {
-        this.audionode.onaudioprocess = LGAudioScript._bypass_function;
+        this.audionode.onaudioprocess = (LGAudioScript as any)._bypass_function;
     };
 
     LGAudioScript.prototype.processCode = function() {
         try {
             var func = new Function("properties", this.properties.code);
-            this._script = new func(this.properties);
+            const ScriptConstructor = func as any;
+            this._script = new ScriptConstructor(this.properties);
             this._old_code = this.properties.code;
             this._callback = this._script.onaudioprocess;
         } catch (err) {
             console.error("Error in onaudioprocess code", err);
-            this._callback = LGAudioScript._bypass_function;
+            this._callback = (LGAudioScript as any)._bypass_function;
             this.audionode.onaudioprocess = this._callback;
         }
     };

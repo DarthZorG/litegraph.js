@@ -1,5 +1,5 @@
 //widgets
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
     /* Button ****************/
@@ -678,7 +678,7 @@
                 ctx.fillText(
                     lines[i],
                     this.properties["align"] == "left" ? 15 : this.size[0] - 15,
-                    fontsize * -0.15 + fontsize * (parseInt(i) + 1)
+                    fontsize * -0.15 + fontsize * (i + 1)
                 );
             }
         }

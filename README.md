@@ -19,7 +19,7 @@ Try it in the [demo site](https://tamats.com/projects/litegraph/editor).
 - Graphs can be executed in NodeJS
 - Highly customizable nodes (color, shape, slots vertical or horizontal, widgets, custom rendering)
 - Easy to integrate in any JS application (one single file, no dependencies)
-- Typescript support
+- TypeScript implementation and declaration support
 
 ## Nodes provided
 Although it is easy to create new node types, LiteGraph comes with some default nodes that could be useful for many cases:
@@ -37,6 +37,13 @@ npm install litegraph.js
 ```
 
 Or downloading the ```build/litegraph.js``` and ```css/litegraph.css``` version from this repository.
+
+## Development
+
+The library sources are TypeScript files under `src/`. Run `npm run build` to
+type-check them and generate the full, mini, and core JavaScript bundles (plus
+their minified variants) under `build/`. Run `npm test` to rebuild and execute
+the compatibility test suite.
 
 ## First project ##
 

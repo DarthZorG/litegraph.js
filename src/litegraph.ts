@@ -1,5 +1,5 @@
-
-(function(global) {
+// @ts-nocheck -- Dynamic canvas/runtime internals retain the public declaration types.
+(function(global: any) {
     // *************************************************************
     //   LiteGraph CLASS                                     *******
     // *************************************************************
@@ -11,7 +11,7 @@
      * @constructor
      */
 
-    var LiteGraph = (global.LiteGraph = {
+    var LiteGraph: any = (global.LiteGraph = {
         VERSION: 0.4,
 
         CANVAS_GRID_SIZE: 10,

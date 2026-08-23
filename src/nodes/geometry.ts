@@ -1,4 +1,4 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
 	var view_matrix = new Float32Array(16);
@@ -814,6 +814,7 @@
 			vertices = this.geometry.vertices = new Float32Array( 3*sides );
 		var delta = (Math.PI * 2) / sides;
 		var gen_uvs = this.properties.uvs;
+		var uvs;
 		if(gen_uvs)
 		{
 			uvs = this.geometry.coords = new Float32Array( 3*sides );
@@ -1015,14 +1016,14 @@
 			//clone
 			if(!this.geometry)
 				this.geometry = {};
-			for(var i in geometry)
+			for(const key in geometry)
 			{
-				if(geometry[i] == null)
+				if(geometry[key] == null)
 					continue;
-				if( geometry[i].constructor == Float32Array )
-					this.geometry[i] = new Float32Array( geometry[i] );
+				if( geometry[key].constructor == Float32Array )
+					this.geometry[key] = new Float32Array( geometry[key] );
 				else
-					this.geometry[i] = geometry[i];
+					this.geometry[key] = geometry[key];
 			}
 			this.geometry._id = geometry._id;
 			if(this.properties.execute_every_frame)
@@ -1095,8 +1096,8 @@ function LGraphGeometryDisplace() {
 
 			//copy
 			this.geometry = {};
-			for(var i in geometry)
-				this.geometry[i] = geometry[i];
+			for(const key in geometry)
+				this.geometry[key] = geometry[key];
 			this.geometry._id = geometry._id;
 			this.geometry._version = geometry._version + 1;
 
@@ -1160,8 +1161,8 @@ function LGraphGeometryDisplace() {
 
 			//copy
 			this.geometry = {};
-			for(var i in geometry)
-				this.geometry[i] = geometry[i];
+			for(const key in geometry)
+				this.geometry[key] = geometry[key];
 			this.geometry._id = generateGeometryId();
 			this.geometry._version = this.my_version++;
 
@@ -1230,10 +1231,10 @@ function LGraphGeometryDisplace() {
 		if(mesh != this.last_mesh)
 		{
 			this.last_mesh = mesh;
-			for(i in mesh.vertexBuffers)
-			{
-				var buffer = mesh.vertexBuffers[i];
-				this.geometry[i] = buffer.data
+				for(const key in mesh.vertexBuffers)
+				{
+					var buffer = mesh.vertexBuffers[key];
+					this.geometry[key] = buffer.data
 			}
 			if(mesh.indexBuffers["triangles"])
 				this.geometry.indices = mesh.indexBuffers["triangles"].data;
@@ -1264,22 +1265,22 @@ function LGraphGeometryDisplace() {
 		if(!this.mesh)
 			this.mesh = new GL.Mesh();
 
-		for(var i in geometry)
+		for(const key in geometry)
 		{
-			if(i[0] == "_")
+			if(key[0] == "_")
 				continue;
 
-			var buffer_data = geometry[i];
+			var buffer_data = geometry[key];
 
-			var info = GL.Mesh.common_buffers[i];
-			if(!info && i != "indices") //unknown buffer
+			var info = GL.Mesh.common_buffers[key];
+			if(!info && key != "indices") //unknown buffer
 				continue;
 			var spacing = info ? info.spacing : 3;
-			var mesh_buffer = this.mesh.vertexBuffers[i];
+			var mesh_buffer = this.mesh.vertexBuffers[key];
 
 			if(!mesh_buffer || mesh_buffer.data.length != buffer_data.length)
 			{
-				mesh_buffer = new GL.Buffer( i == "indices" ? GL.ELEMENT_ARRAY_BUFFER : GL.ARRAY_BUFFER, buffer_data, spacing, GL.DYNAMIC_DRAW );
+				mesh_buffer = new GL.Buffer( key == "indices" ? GL.ELEMENT_ARRAY_BUFFER : GL.ARRAY_BUFFER, buffer_data, spacing, GL.DYNAMIC_DRAW );
 			}
 			else
 			{
@@ -1287,7 +1288,7 @@ function LGraphGeometryDisplace() {
 				mesh_buffer.upload(GL.DYNAMIC_DRAW);
 			}
 
-			this.mesh.addBuffer( i, mesh_buffer );
+			this.mesh.addBuffer( key, mesh_buffer );
 		}
 
 		if(this.mesh.vertexBuffers.normals &&this.mesh.vertexBuffers.normals.data.length != this.mesh.vertexBuffers.vertices.data.length )

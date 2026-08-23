@@ -1,4 +1,4 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
     function GamepadInput() {
@@ -193,10 +193,14 @@
 	GamepadInput.mapping_array = ["a","b","x","y","lb","rb","lt","rt","back","start","ls","rs"];
 
     GamepadInput.prototype.getGamepad = function() {
+        const legacyNavigator = navigator as Navigator & {
+            webkitGetGamepads?: Navigator["getGamepads"];
+            mozGetGamepads?: Navigator["getGamepads"];
+        };
         var getGamepads =
-            navigator.getGamepads ||
-            navigator.webkitGetGamepads ||
-            navigator.mozGetGamepads;
+            legacyNavigator.getGamepads ||
+            legacyNavigator.webkitGetGamepads ||
+            legacyNavigator.mozGetGamepads;
         if (!getGamepads) {
             return null;
         }

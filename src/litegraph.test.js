@@ -4,7 +4,7 @@ describe("register node types", () => {
 
     beforeEach(() => {
         jest.resetModules();
-        lg = require("./litegraph");
+        lg = require("../build/src/litegraph");
         Sum = function Sum() {
             this.addInput("a", "number");
             this.addInput("b", "number");
@@ -177,7 +177,7 @@ describe("unregister node types", () => {
 
     beforeEach(() => {
         jest.resetModules();
-        lg = require("./litegraph");
+        lg = require("../build/src/litegraph");
         Sum = function Sum() {
             this.addInput("a", "number");
             this.addInput("b", "number");

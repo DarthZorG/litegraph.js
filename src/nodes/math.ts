@@ -1,4 +1,4 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
 
     //Converter
@@ -46,7 +46,7 @@
                                 break;
                         }
 
-                        var result = new Float32Array(count);
+                        result = new Float32Array(count);
                         if (v.length) {
                             for (
                                 var j = 0;
@@ -260,11 +260,13 @@
             f += 1024;
         }
         var f_min = Math.floor(f);
-        var f = f - f_min;
+        const fraction = f - f_min;
         var r1 = MathNoise.data[f_min];
         var r2 = MathNoise.data[f_min == 1023 ? 0 : f_min + 1];
         if (smooth) {
-            f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+            f = fraction * fraction * fraction * (fraction * (fraction * 6.0 - 15.0) + 10.0);
+        } else {
+            f = fraction;
         }
         return r1 * (1 - f) + r2 * f;
     };
@@ -720,8 +722,8 @@
 		else
 		{
 			result = {};
-			for(var i in A)
-				result[i] = func(A[i],B);
+			for(const key in A)
+				result[key] = func(A[key],B);
 		}
 	    this.setOutputData(0, result);
     };

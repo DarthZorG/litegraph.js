@@ -1,8 +1,8 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
     var MIDI_COLOR = "#243";
 
-    function MIDIEvent(data) {
+    function MIDIEvent(data?: any) {
         this.channel = 0;
         this.cmd = 0;
         this.data = new Uint32Array(3);
@@ -201,7 +201,7 @@
     };
 
     //transform from a pitch number to string like "C4"
-    MIDIEvent.toNoteString = function(d, skip_octave) {
+    MIDIEvent.toNoteString = function(d, skip_octave = false) {
         d = Math.round(d); //in case it has decimals
         var note = d - 21;
         var octave = Math.floor((d - 24) / 12 + 1);
@@ -329,7 +329,7 @@
     }
 
     //MIDI wrapper, instantiate by MIDIIn and MIDIOut
-    function MIDIInterface(on_ready, on_error) {
+    function MIDIInterface(on_ready: any, on_error?: any) {
         if (!navigator.requestMIDIAccess) {
             this.error = "not suppoorted";
             if (on_error) {
@@ -421,8 +421,8 @@
             if (callback) {
                 callback(a.data, midi_event);
             }
-            if (MIDIInterface.on_message) {
-                MIDIInterface.on_message(a.data, midi_event);
+            if ((MIDIInterface as any).on_message) {
+                (MIDIInterface as any).on_message(a.data, midi_event);
             }
         };
         console.log("port open: ", input_port);
@@ -455,7 +455,7 @@
             return;
         }
 
-        MIDIInterface.output = this;
+        (MIDIInterface as any).output = this;
 
         if (midi_data.constructor === MIDIEvent) {
             output_port.send(midi_data.data);

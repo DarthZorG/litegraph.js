@@ -1,4 +1,4 @@
-//Creates an interface to access extra features from a graph (like play, stop, live, etc)
+ //Creates an interface to access extra features from a graph (like play, stop, live, etc)
 function Editor(container_id, options) {
     options = options || {};
 
@@ -93,13 +93,13 @@ Editor.prototype.addLoadCounter = function() {
     var self = this;
 
     setInterval(function() {
-        meter.querySelector(".cpuload .fgload").style.width =
+        (meter.querySelector(".cpuload .fgload") as HTMLElement).style.width =
             2 * self.graph.execution_time * 90 + "px";
         if (self.graph.status == LGraph.STATUS_RUNNING) {
-            meter.querySelector(".gpuload .fgload").style.width =
+            (meter.querySelector(".gpuload .fgload") as HTMLElement).style.width =
                 self.graphcanvas.render_time * 10 * 90 + "px";
         } else {
-            meter.querySelector(".gpuload .fgload").style.width = 4 + "px";
+            (meter.querySelector(".gpuload .fgload") as HTMLElement).style.width = 4 + "px";
         }
     }, 200);
 };
@@ -178,7 +178,7 @@ Editor.prototype.onDropItem = function(e)
 		if(ext == "json")
 		{
 			reader.onload = function(event) {
-				var data = JSON.parse( event.target.result );
+					var data = JSON.parse(event.target.result as string);
 				that.graph.configure(data);
 			};
 			reader.readAsText(file);
@@ -188,11 +188,11 @@ Editor.prototype.onDropItem = function(e)
 
 Editor.prototype.goFullscreen = function() {
     if (this.root.requestFullscreen) {
-        this.root.requestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+        this.root.requestFullscreen();
     } else if (this.root.mozRequestFullscreen) {
-        this.root.requestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+        this.root.requestFullscreen();
     } else if (this.root.webkitRequestFullscreen) {
-        this.root.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+        this.root.webkitRequestFullscreen();
     } else {
         throw "Fullscreen not supported";
     }

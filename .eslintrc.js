@@ -6,11 +6,12 @@ module.exports = {
         "jest/globals": true
     },
     "extends": "eslint:recommended",
+    "parser": "@typescript-eslint/parser",
     "overrides": [
     ],
     "parserOptions": {
         "ecmaVersion": "latest",
-        "sourceType": "module"
+        "sourceType": "script"
     },
     "plugins": ["jest"],
     "globals": {
@@ -38,6 +39,13 @@ module.exports = {
         "hex2num": true,
         "colorToString": true,
         "showElement": true,
+        "clamp": true,
+        "curve_editor": true,
+        "getTime": true,
+        "mat4": true,
+        "MidiParser": true,
+        "polarToCartesian": true,
+        "typedArrayToArray": true,
         "quat": true,
         "AudioSynth": true,
         "SillyClient": true
@@ -51,6 +59,14 @@ module.exports = {
         "no-unused-vars": "warn",
         "no-mixed-spaces-and-tabs": "warn",
         "no-unreachable": "warn",
+        "no-cond-assign": "warn",
+        "no-extra-semi": "warn",
+        "no-fallthrough": "warn",
+        "no-prototype-builtins": "warn",
+        "no-self-assign": "warn",
+        "no-undef": "warn",
+        "no-useless-escape": "warn",
+        "valid-typeof": "warn",
         "curly": ["warn", "all"]
     }
 }

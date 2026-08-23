@@ -1,4 +1,4 @@
-(function(global) {
+(function(global: any) {
     var LiteGraph = global.LiteGraph;
     var LGraphTexture = global.LGraphTexture;
 
@@ -18,12 +18,12 @@
                 precision: LGraphTexture.DEFAULT
             };
 
-            if (!LGraphFXLens._shader) {
-                LGraphFXLens._shader = new GL.Shader(
+            if (!(LGraphFXLens as any)._shader) {
+                (LGraphFXLens as any)._shader = new GL.Shader(
                     GL.Shader.SCREEN_VERTEX_SHADER,
                     LGraphFXLens.pixel_shader
                 );
-                LGraphFXLens._texture = new GL.Texture(3, 1, {
+                (LGraphFXLens as any)._texture = new GL.Texture(3, 1, {
                     format: gl.RGB,
                     wrap: gl.CLAMP_TO_EDGE,
                     magFilter: gl.LINEAR,
@@ -77,7 +77,7 @@
             gl.disable(gl.BLEND);
             gl.disable(gl.DEPTH_TEST);
             var mesh = Mesh.getScreenQuad();
-            var shader = LGraphFXLens._shader;
+            var shader = (LGraphFXLens as any)._shader;
             //var camera = LS.Renderer._current_camera;
 
             this._tex.drawTo(function() {
@@ -310,17 +310,17 @@
             //iterations
             var size = this.properties.size;
 
-            var first_shader = LGraphFXBokeh._first_shader;
+            var first_shader = (LGraphFXBokeh as any)._first_shader;
             if (!first_shader) {
-                first_shader = LGraphFXBokeh._first_shader = new GL.Shader(
+                first_shader = (LGraphFXBokeh as any)._first_shader = new GL.Shader(
                     Shader.SCREEN_VERTEX_SHADER,
                     LGraphFXBokeh._first_pixel_shader
                 );
             }
 
-            var second_shader = LGraphFXBokeh._second_shader;
+            var second_shader = (LGraphFXBokeh as any)._second_shader;
             if (!second_shader) {
-                second_shader = LGraphFXBokeh._second_shader = new GL.Shader(
+                second_shader = (LGraphFXBokeh as any)._second_shader = new GL.Shader(
                     LGraphFXBokeh._second_vertex_shader,
                     LGraphFXBokeh._second_pixel_shader
                 );
@@ -703,8 +703,8 @@
                 precision: LGraphTexture.DEFAULT
             };
 
-            if (!LGraphFXVigneting._shader) {
-                LGraphFXVigneting._shader = new GL.Shader(
+            if (!(LGraphFXVigneting as any)._shader) {
+                (LGraphFXVigneting as any)._shader = new GL.Shader(
                     Shader.SCREEN_VERTEX_SHADER,
                     LGraphFXVigneting.pixel_shader
                 );
@@ -746,7 +746,7 @@
             gl.disable(gl.DEPTH_TEST);
 
             var mesh = Mesh.getScreenQuad();
-            var shader = LGraphFXVigneting._shader;
+            var shader = (LGraphFXVigneting as any)._shader;
             var invert = this.properties.invert;
 
             this._tex.drawTo(function() {
