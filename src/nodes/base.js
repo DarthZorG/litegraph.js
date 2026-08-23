@@ -641,6 +641,91 @@
     LiteGraph.GraphInput = GraphInput;
     LiteGraph.registerNodeType("graph/input", GraphInput);
 
+    //Automatically typed input for a subgraph
+    function GraphAutoInput() {
+        GraphInput.call(this);
+
+        this.properties.type = "";
+        this.outputs[0].type = "";
+        this.type_widget.name = "Type (auto)";
+        this.type_widget.value = "";
+        this.type_widget.disabled = true;
+        this.updateType();
+    }
+
+    GraphAutoInput.title = "Auto Input";
+    GraphAutoInput.desc = "Input of the graph that inherits its type from the first connection";
+    GraphAutoInput.prototype = Object.create(GraphInput.prototype);
+    GraphAutoInput.prototype.constructor = GraphAutoInput;
+
+    GraphAutoInput.prototype.onPropertyChanged = function(name, value) {
+        if (name == "type") {
+            return false;
+        }
+        return GraphInput.prototype.onPropertyChanged.call(this, name, value);
+    };
+
+    GraphAutoInput.prototype.setInferredType = function(type) {
+        type = type || "";
+        this.properties.type = type;
+        this.updateType();
+    };
+
+    GraphAutoInput.prototype.onConfigure = function() {
+        var inferred_type = "";
+        var links = this.outputs[0].links;
+        if (links && this.graph) {
+            for (var i = 0; i < links.length; ++i) {
+                var link_info = this.graph.links[links[i]];
+                if (!link_info) {
+                    continue;
+                }
+                var target = this.graph.getNodeById(link_info.target_id);
+                var input = target && target.inputs[link_info.target_slot];
+                inferred_type = (input && input.type) || link_info.type || "";
+                if (inferred_type) {
+                    break;
+                }
+            }
+        }
+        this.setInferredType(inferred_type);
+    };
+
+    GraphAutoInput.prototype.hasActiveOutputLinks = function() {
+        var links = this.outputs[0].links;
+        if (!links || !links.length || !this.graph) {
+            return false;
+        }
+        for (var i = 0; i < links.length; ++i) {
+            if (this.graph.links[links[i]]) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    GraphAutoInput.prototype.onConnectionsChange = function(
+        type,
+        slot,
+        is_connected,
+        link_info
+    ) {
+        if (type != LiteGraph.OUTPUT || slot != 0) {
+            return;
+        }
+
+        if (is_connected && link_info) {
+            var target = this.graph && this.graph.getNodeById(link_info.target_id);
+            var input = target && target.inputs[link_info.target_slot];
+            this.setInferredType((input && input.type) || link_info.type);
+        } else if (!this.hasActiveOutputLinks()) {
+            this.setInferredType("");
+        }
+    };
+
+    LiteGraph.GraphAutoInput = GraphAutoInput;
+    LiteGraph.registerNodeType("graph/auto_input", GraphAutoInput);
+
     //Output for a subgraph
     function GraphOutput() {
         this.addInput("", "");
@@ -773,6 +858,69 @@
 
     LiteGraph.GraphOutput = GraphOutput;
     LiteGraph.registerNodeType("graph/output", GraphOutput);
+
+    //Automatically typed output for a subgraph
+    function GraphAutoOutput() {
+        GraphOutput.call(this);
+
+        this.properties.type = "";
+        this.inputs[0].type = "";
+        this.type_widget.name = "Type (auto)";
+        this.type_widget.value = "";
+        this.type_widget.disabled = true;
+        this.updateType();
+    }
+
+    GraphAutoOutput.title = "Auto Output";
+    GraphAutoOutput.desc = "Output of the graph that inherits its type from the first connection";
+    GraphAutoOutput.prototype = Object.create(GraphOutput.prototype);
+    GraphAutoOutput.prototype.constructor = GraphAutoOutput;
+
+    GraphAutoOutput.prototype.onPropertyChanged = function(name, value) {
+        if (name == "type") {
+            return false;
+        }
+        return GraphOutput.prototype.onPropertyChanged.call(this, name, value);
+    };
+
+    GraphAutoOutput.prototype.setInferredType = function(type) {
+        type = type || "";
+        this.properties.type = type;
+        this.updateType();
+    };
+
+    GraphAutoOutput.prototype.onConfigure = function() {
+        var inferred_type = "";
+        var link_info = this.graph && this.graph.links[this.inputs[0].link];
+        if (link_info) {
+            var origin = this.graph.getNodeById(link_info.origin_id);
+            var output = origin && origin.outputs[link_info.origin_slot];
+            inferred_type = (output && output.type) || link_info.type || "";
+        }
+        this.setInferredType(inferred_type);
+    };
+
+    GraphAutoOutput.prototype.onConnectionsChange = function(
+        type,
+        slot,
+        is_connected,
+        link_info
+    ) {
+        if (type != LiteGraph.INPUT || slot != 0) {
+            return;
+        }
+
+        if (is_connected && link_info) {
+            var origin = this.graph && this.graph.getNodeById(link_info.origin_id);
+            var output = origin && origin.outputs[link_info.origin_slot];
+            this.setInferredType((output && output.type) || link_info.type);
+        } else if (!this.inputs[0].link) {
+            this.setInferredType("");
+        }
+    };
+
+    LiteGraph.GraphAutoOutput = GraphAutoOutput;
+    LiteGraph.registerNodeType("graph/auto_output", GraphAutoOutput);
 
     //Constant
     function ConstantNumber() {

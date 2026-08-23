@@ -1790,6 +1790,13 @@
             LiteGraph.GraphInput,
             this._input_nodes
         );
+        if (LiteGraph.GraphAutoInput) {
+            for (var i = 0; i < this._nodes.length; ++i) {
+                if (this._nodes[i].constructor === LiteGraph.GraphAutoInput) {
+                    this._input_nodes.push(this._nodes[i]);
+                }
+            }
+        }
         for (var i = 0; i < this._input_nodes.length; ++i) {
             var node = this._input_nodes[i];
             if (node.properties.name != action) {
