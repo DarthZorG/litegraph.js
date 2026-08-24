@@ -1132,6 +1132,7 @@ export declare class LGraphCanvas {
     static onMenuNodeColors: ContextMenuEventListener;
     static onMenuNodeShapes: ContextMenuEventListener;
     static onMenuNodeRemove: ContextMenuEventListener;
+    static onMenuNodeCopy: ContextMenuEventListener;
     static onMenuNodeClone: ContextMenuEventListener;
 
     constructor(
@@ -1275,6 +1276,10 @@ export declare class LGraphCanvas {
     clear(): void;
     /** assigns a graph, you can reassign graphs to the same canvas */
     setGraph(graph: LGraph, skipClear?: boolean): void;
+    /** returns the top-level graph while a subgraph is open */
+    getTopGraph(): LGraph;
+    /** returns the graph currently displayed by this canvas */
+    getCurrentGraph(): LGraph;
     /** opens a graph contained inside a node in the current graph */
     openSubgraph(graph: LGraph): void;
     /** closes a subgraph contained inside a node */
@@ -1327,8 +1332,10 @@ export declare class LGraphCanvas {
     /** process a key event */
     processKey(e: KeyboardEvent): boolean | undefined;
 
-    copyToClipboard(): void;
-    pasteFromClipboard(): void;
+    copyToClipboard(nodes?: LGraphNode[]): void;
+    pasteFromClipboard(isConnectUnselected?: boolean): LGraphNode[];
+    /** clones nodes directly into another graph without changing the clipboard */
+    cloneNodesToGraph(targetGraph: LGraph, nodes?: LGraphNode[]): LGraphNode[];
     processDrop(e: DragEvent): void;
     checkDropItem(e: DragEvent): void;
     processNodeDblClicked(n: LGraphNode): void;

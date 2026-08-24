@@ -4793,9 +4793,19 @@ LGraphNode.prototype.executeAction = function(action)
             this.setDirty(true, true);
         }
         getTopGraph() {
-            if (this._graph_stack.length)
+            if (this._graph_stack && this._graph_stack.length) {
                 return this._graph_stack[0];
-            return this.graph;
+            }
+            var graph = this.graph;
+            var visited_graphs = new Set();
+            while (graph &&
+                !visited_graphs.has(graph) &&
+                graph._subgraph_node &&
+                graph._subgraph_node.graph) {
+                visited_graphs.add(graph);
+                graph = graph._subgraph_node.graph;
+            }
+            return graph;
         }
         openSubgraph(graph) {
             if (!graph) {
@@ -6153,82 +6163,80 @@ LGraphNode.prototype.executeAction = function(action)
                 return false;
             }
         }
-        copyToClipboard() {
+        serializeNodes(nodes) {
             var clipboard_info = {
                 nodes: [],
                 links: [],
             };
-            var index = 0;
-            var selected_nodes_array = [];
-            for (var i in this.selected_nodes) {
-                var node = this.selected_nodes[i];
-                if (node.clonable === false)
+            var source_nodes = nodes || Object.values(this.selected_nodes || {});
+            var source_graph = source_nodes.length
+                ? source_nodes[0].graph
+                : this.graph;
+            var node_indexes = new Map();
+            for (var i = 0; i < source_nodes.length; ++i) {
+                var node = source_nodes[i];
+                if (node.clonable === false) {
                     continue;
-                node._relative_id = index;
-                selected_nodes_array.push(node);
-                index += 1;
-            }
-            for (var i = 0; i < selected_nodes_array.length; ++i) {
-                var node = selected_nodes_array[i];
-                if (node.clonable === false)
-                    continue;
+                }
                 var cloned = node.clone();
                 if (!cloned) {
                     console.warn("node type not found: " + node.type);
                     continue;
                 }
+                node_indexes.set(node, clipboard_info.nodes.length);
                 clipboard_info.nodes.push(cloned.serialize());
-                if (node.inputs && node.inputs.length) {
-                    for (var j = 0; j < node.inputs.length; ++j) {
-                        var input = node.inputs[j];
+            }
+            for (var source_index = 0; source_index < source_nodes.length; ++source_index) {
+                var source_node = source_nodes[source_index];
+                var node_index = node_indexes.get(source_node);
+                if (node_index == null) {
+                    continue;
+                }
+                if (source_node.inputs && source_node.inputs.length) {
+                    for (var j = 0; j < source_node.inputs.length; ++j) {
+                        var input = source_node.inputs[j];
                         if (!input || input.link == null) {
                             continue;
                         }
-                        var link_info = this.graph.links[input.link];
+                        var link_info = source_graph.links[input.link];
                         if (!link_info) {
                             continue;
                         }
-                        var target_node = this.graph.getNodeById(link_info.origin_id);
-                        if (!target_node) {
+                        var origin_node = source_graph.getNodeById(link_info.origin_id);
+                        if (!origin_node) {
                             continue;
                         }
                         clipboard_info.links.push([
-                            target_node._relative_id,
+                            node_indexes.has(origin_node)
+                                ? node_indexes.get(origin_node)
+                                : null,
                             link_info.origin_slot, //j,
-                            node._relative_id,
+                            node_index,
                             link_info.target_slot,
-                            target_node.id,
+                            origin_node.id,
                         ]);
                     }
                 }
             }
+            return clipboard_info;
+        }
+        copyToClipboard(nodes) {
+            var clipboard_info = this.serializeNodes(nodes);
             localStorage.setItem("litegrapheditor_clipboard", JSON.stringify(clipboard_info));
         }
-        pasteFromClipboard(isConnectUnselected = false) {
-            // if ctrl + shift + v is off, return when isConnectUnselected is true (shift is pressed) to maintain old behavior
-            if (!LiteGraph.ctrl_shift_v_paste_connect_unselected_outputs &&
-                isConnectUnselected) {
-                return;
+        pasteNodes(clipboard_info, target_graph, position, isConnectUnselected) {
+            if (!clipboard_info || !clipboard_info.nodes.length) {
+                return [];
             }
-            var data = localStorage.getItem("litegrapheditor_clipboard");
-            if (!data) {
-                return;
-            }
-            this.graph.beforeChange();
-            //create nodes
-            var clipboard_info = JSON.parse(data);
-            // calculate top-left node, could work without this processing but using diff with last node pos :: clipboard_info.nodes[clipboard_info.nodes.length-1].pos
-            var posMin = false;
-            var posMinIndexes = false;
+            target_graph = target_graph || this.graph;
+            var posMin = null;
             for (var i = 0; i < clipboard_info.nodes.length; ++i) {
                 if (posMin) {
                     if (posMin[0] > clipboard_info.nodes[i].pos[0]) {
                         posMin[0] = clipboard_info.nodes[i].pos[0];
-                        posMinIndexes[0] = i;
                     }
                     if (posMin[1] > clipboard_info.nodes[i].pos[1]) {
                         posMin[1] = clipboard_info.nodes[i].pos[1];
-                        posMinIndexes[1] = i;
                     }
                 }
                 else {
@@ -6236,45 +6244,99 @@ LGraphNode.prototype.executeAction = function(action)
                         clipboard_info.nodes[i].pos[0],
                         clipboard_info.nodes[i].pos[1],
                     ];
-                    posMinIndexes = [i, i];
                 }
             }
+            target_graph.beforeChange();
             var nodes = [];
-            for (var i = 0; i < clipboard_info.nodes.length; ++i) {
-                var node_data = clipboard_info.nodes[i];
-                var node = LiteGraph.createNode(node_data.type);
-                if (node) {
-                    node.configure(node_data);
-                    //paste in last known mouse position
-                    node.pos[0] += this.graph_mouse[0] - posMin[0]; //+= 5;
-                    node.pos[1] += this.graph_mouse[1] - posMin[1]; //+= 5;
-                    this.graph.add(node, { doProcessChange: false });
-                    nodes.push(node);
-                }
-            }
-            //create links
-            for (var i = 0; i < clipboard_info.links.length; ++i) {
-                var link_info = clipboard_info.links[i];
-                var origin_node;
-                var origin_node_relative_id = link_info[0];
-                if (origin_node_relative_id != null) {
-                    origin_node = nodes[origin_node_relative_id];
-                }
-                else if (LiteGraph.ctrl_shift_v_paste_connect_unselected_outputs &&
-                    isConnectUnselected) {
-                    var origin_node_id = link_info[4];
-                    if (origin_node_id) {
-                        origin_node = this.graph.getNodeById(origin_node_id);
+            try {
+                for (var node_index = 0; node_index < clipboard_info.nodes.length; ++node_index) {
+                    var node_data = clipboard_info.nodes[node_index];
+                    var node = LiteGraph.createNode(node_data.type);
+                    if (node) {
+                        node.configure(node_data);
+                        if (position) {
+                            node.pos[0] += position[0] - posMin[0];
+                            node.pos[1] += position[1] - posMin[1];
+                        }
+                        target_graph.add(node, true);
+                        nodes[node_index] = node;
                     }
                 }
-                var target_node = nodes[link_info[2]];
-                if (origin_node && target_node)
-                    origin_node.connect(link_info[1], target_node, link_info[3]);
-                else
-                    console.warn("Warning, nodes missing on pasting");
+                for (var link_index = 0; link_index < clipboard_info.links.length; ++link_index) {
+                    var link_info = clipboard_info.links[link_index];
+                    var origin_node;
+                    var origin_node_relative_id = link_info[0];
+                    if (origin_node_relative_id != null) {
+                        origin_node = nodes[origin_node_relative_id];
+                    }
+                    else if (LiteGraph.ctrl_shift_v_paste_connect_unselected_outputs &&
+                        isConnectUnselected) {
+                        var origin_node_id = link_info[4];
+                        if (origin_node_id != null) {
+                            origin_node = target_graph.getNodeById(origin_node_id);
+                        }
+                    }
+                    var target_node = nodes[link_info[2]];
+                    if (origin_node && target_node) {
+                        origin_node.connect(link_info[1], target_node, link_info[3]);
+                    }
+                }
+                target_graph.updateExecutionOrder();
             }
+            finally {
+                target_graph.afterChange();
+            }
+            return nodes.filter(Boolean);
+        }
+        getClonePosition(target_graph, source_graph) {
+            var containing_node = source_graph && source_graph._subgraph_node;
+            if (containing_node && containing_node.graph === target_graph) {
+                return [
+                    containing_node.pos[0] + containing_node.size[0] + 40,
+                    containing_node.pos[1],
+                ];
+            }
+            if (!target_graph._nodes.length) {
+                return [0, 0];
+            }
+            var max_x = -Infinity;
+            var min_y = Infinity;
+            for (var i = 0; i < target_graph._nodes.length; ++i) {
+                var node = target_graph._nodes[i];
+                max_x = Math.max(max_x, node.pos[0] + node.size[0]);
+                min_y = Math.min(min_y, node.pos[1]);
+            }
+            return [max_x + 40, min_y];
+        }
+        cloneNodesToGraph(target_graph, nodes) {
+            if (!target_graph) {
+                return [];
+            }
+            nodes = nodes || Object.values(this.selected_nodes || {});
+            var source_graph = nodes.length ? nodes[0].graph : this.graph;
+            var clipboard_info = this.serializeNodes(nodes);
+            var position = this.getClonePosition(target_graph, source_graph);
+            var cloned_nodes = this.pasteNodes(clipboard_info, target_graph, position, false);
+            if (target_graph === this.graph) {
+                this.selectNodes(cloned_nodes);
+            }
+            this.setDirty(true, true);
+            return cloned_nodes;
+        }
+        pasteFromClipboard(isConnectUnselected = false) {
+            // if ctrl + shift + v is off, return when isConnectUnselected is true (shift is pressed) to maintain old behavior
+            if (!LiteGraph.ctrl_shift_v_paste_connect_unselected_outputs &&
+                isConnectUnselected) {
+                return [];
+            }
+            var data = localStorage.getItem("litegrapheditor_clipboard");
+            if (!data) {
+                return [];
+            }
+            var clipboard_info = JSON.parse(data);
+            var nodes = this.pasteNodes(clipboard_info, this.graph, this.graph_mouse, isConnectUnselected);
             this.selectNodes(nodes);
-            this.graph.afterChange();
+            return nodes;
         }
         processDrop(e) {
             e.preventDefault();
@@ -10506,6 +10568,13 @@ LGraphNode.prototype.executeAction = function(action)
                         callback: LGraphCanvas.onMenuAdd,
                     },
                     { content: "Add Group", callback: LGraphCanvas.onGroupAdd },
+                    null,
+                    {
+                        content: "Paste",
+                        callback: function () {
+                            that.pasteFromClipboard();
+                        },
+                    },
                     //{ content: "Arrange", callback: that.graph.arrange },
                     //{content:"Collapse All", callback: LGraphCanvas.onMenuCollapseAll }
                 ];
@@ -10531,6 +10600,89 @@ LGraphNode.prototype.executeAction = function(action)
                 if (extra) {
                     options = options.concat(extra);
                 }
+            }
+            return options;
+        }
+        getNodesForMenuAction(node) {
+            var selected_nodes = Object.values(this.selected_nodes || {});
+            if (selected_nodes.length > 1 && selected_nodes.includes(node)) {
+                return selected_nodes;
+            }
+            return [node];
+        }
+        getCloneIntoMenuOptions(node) {
+            var that = this;
+            var current_graph = node.graph;
+            var top_graph = this.getTopGraph();
+            var visited_graphs = new Set();
+            function cloneInto(target_graph) {
+                return function () {
+                    that.cloneNodesToGraph(target_graph, that.getNodesForMenuAction(node));
+                };
+            }
+            function getSubgraphOptions(graph) {
+                if (visited_graphs.has(graph)) {
+                    return [];
+                }
+                visited_graphs.add(graph);
+                var options = [];
+                for (var i = 0; i < graph._nodes.length; ++i) {
+                    var subgraph_node = graph._nodes[i];
+                    if (!subgraph_node.subgraph) {
+                        continue;
+                    }
+                    var subgraph = subgraph_node.subgraph;
+                    var children = getSubgraphOptions(subgraph);
+                    var title = subgraph_node.getTitle();
+                    if (children.length) {
+                        options.push({
+                            content: title,
+                            has_submenu: true,
+                            submenu: {
+                                title: title,
+                                options: [
+                                    {
+                                        content: subgraph === current_graph
+                                            ? "This graph (current)"
+                                            : "This graph",
+                                        disabled: subgraph === current_graph,
+                                        callback: cloneInto(subgraph),
+                                    },
+                                    null,
+                                ].concat(children),
+                            },
+                        });
+                    }
+                    else {
+                        options.push({
+                            content: title +
+                                (subgraph === current_graph
+                                    ? " (current)"
+                                    : ""),
+                            disabled: subgraph === current_graph,
+                            callback: cloneInto(subgraph),
+                        });
+                    }
+                }
+                return options;
+            }
+            var options = [];
+            var parent_node = current_graph._subgraph_node;
+            if (parent_node && parent_node.graph) {
+                options.push({
+                    content: "Parent graph",
+                    callback: cloneInto(parent_node.graph),
+                }, null);
+            }
+            options.push({
+                content: "Main graph" +
+                    (top_graph === current_graph ? " (current)" : ""),
+                disabled: top_graph === current_graph,
+                callback: cloneInto(top_graph),
+            });
+            var subgraphs = getSubgraphOptions(top_graph);
+            if (subgraphs.length) {
+                options.push(null, ...subgraphs);
             }
             return options;
         }
@@ -10610,9 +10762,25 @@ LGraphNode.prototype.executeAction = function(action)
             }
             if (node.clonable !== false) {
                 options.push({
+                    content: "Copy",
+                    callback: LGraphCanvas.onMenuNodeCopy,
+                }, {
                     content: "Clone",
                     callback: LGraphCanvas.onMenuNodeClone,
                 });
+                var clone_into_options = this.getCloneIntoMenuOptions(node);
+                if (clone_into_options.some(function (option) {
+                    return option && !option.disabled;
+                })) {
+                    options.push({
+                        content: "Clone into...",
+                        has_submenu: true,
+                        submenu: {
+                            title: "Destination graph",
+                            options: clone_into_options,
+                        },
+                    });
+                }
             }
             if (0)
                 //TODO
@@ -11874,6 +12042,13 @@ LGraphNode.prototype.executeAction = function(action)
         subgraph_node.buildFromNodes(nodes_list);
         graphcanvas.deselectAllNodes();
         node.setDirtyCanvas(true, true);
+    };
+    LGraphCanvas.onMenuNodeCopy = function (value, options, e, menu, node) {
+        var graphcanvas = LGraphCanvas.active_canvas;
+        if (!graphcanvas || !node) {
+            return;
+        }
+        graphcanvas.copyToClipboard(graphcanvas.getNodesForMenuAction(node));
     };
     LGraphCanvas.onMenuNodeClone = function (value, options, e, menu, node) {
         node.graph.beforeChange();
