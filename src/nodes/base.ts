@@ -198,10 +198,17 @@
         computeSize() {
             var num_inputs = this.inputs ? this.inputs.length : 0;
             var num_outputs = this.outputs ? this.outputs.length : 0;
+            var widgets_height = 0;
+            if (this.widgets && this.widgets.length) {
+                widgets_height =
+                    this.widgets.length * (LiteGraph.NODE_WIDGET_HEIGHT + 4) +
+                    8;
+            }
             return [
                 200,
                 Math.max(num_inputs, num_outputs) * LiteGraph.NODE_SLOT_HEIGHT +
-                    LiteGraph.NODE_TITLE_HEIGHT,
+                    LiteGraph.NODE_TITLE_HEIGHT +
+                    widgets_height,
             ];
         }
 
@@ -293,6 +300,15 @@
 
         onResize(size) {
             size[1] += 20;
+        }
+
+        configure(info) {
+            this.subgraph._is_configuring_subgraph = true;
+            try {
+                LiteGraph.LGraphNode.prototype.configure.call(this, info);
+            } finally {
+                this.subgraph._is_configuring_subgraph = false;
+            }
         }
 
         serialize() {
@@ -781,6 +797,367 @@
 
     LiteGraph.GraphAutoInput = GraphAutoInput;
     LiteGraph.registerNodeType("graph/auto_input", GraphAutoInput);
+
+    //A widget-backed input for a subgraph
+    class GraphPropertyInput extends GraphInput {
+        static [key: string]: any;
+        [key: string]: any;
+
+        constructor() {
+            super();
+
+            this.properties.type = "";
+            this.outputs[0].type = "";
+            this.type_widget.name = "Type (auto)";
+            this.type_widget.value = "";
+            this.type_widget.disabled = true;
+
+            this.addProperty("property_type", "number", "enum", {
+                values: ["number", "string", "boolean"],
+            });
+
+            var that = this;
+            this.property_type_widget = this.addWidget(
+                "combo",
+                "Property type",
+                this.properties.property_type,
+                function (value) {
+                    that.setProperty("property_type", value);
+                },
+                { values: ["number", "string", "boolean"] },
+            );
+
+            //Keep the mapping next to the inferred connection type.
+            this.widgets.pop();
+            this.widgets.splice(2, 0, this.property_type_widget);
+            this.value_widget.name = "Default";
+            this.name_in_subgraph = "";
+            this.updateType();
+            this.setSize(this.computeSize());
+        }
+
+        getSubgraphNode() {
+            return this.graph && this.graph._subgraph_node;
+        }
+
+        onAdded() {
+            if (this.properties.name) {
+                if (!this.isPropertyNameAvailable(this.properties.name)) {
+                    this.properties.name = "";
+                    this.name_widget.value = "";
+                    this.name_in_subgraph = "";
+                    return;
+                }
+                this.syncSubgraphWidget();
+            }
+        }
+
+        getEffectivePropertyType() {
+            var output_type = String(this.properties.type || "").toLowerCase();
+            if (
+                output_type == "number" ||
+                output_type == "string" ||
+                output_type == "boolean"
+            ) {
+                return output_type;
+            }
+            return this.properties.property_type || "number";
+        }
+
+        coercePropertyValue(value, type) {
+            if (type == "number") {
+                var number = Number(value);
+                return Number.isNaN(number) ? 0 : number;
+            }
+            if (type == "boolean") {
+                if (typeof value == "string") {
+                    var normalized = value.trim().toLowerCase();
+                    return !(
+                        normalized == "" ||
+                        normalized == "false" ||
+                        normalized == "0"
+                    );
+                }
+                return Boolean(value);
+            }
+            return value == null ? "" : String(value);
+        }
+
+        getPropertyWidget() {
+            var subgraph_node = this.getSubgraphNode();
+            if (!subgraph_node || !subgraph_node.widgets) {
+                return null;
+            }
+            for (var i = 0; i < subgraph_node.widgets.length; ++i) {
+                var widget = subgraph_node.widgets[i];
+                if (widget && widget._property_input_node === this) {
+                    return widget;
+                }
+            }
+            return null;
+        }
+
+        isPropertyNameAvailable(name) {
+            if (!name || name == "enabled") {
+                return false;
+            }
+            var subgraph_node = this.getSubgraphNode();
+            if (!subgraph_node || !subgraph_node.widgets) {
+                return true;
+            }
+            for (var i = 0; i < subgraph_node.widgets.length; ++i) {
+                var widget = subgraph_node.widgets[i];
+                if (
+                    widget &&
+                    widget !== this.getPropertyWidget() &&
+                    widget.options &&
+                    widget.options.property == name
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        syncSubgraphWidget(previous_name = null) {
+            var subgraph_node = this.getSubgraphNode();
+            var name = this.properties.name;
+            if (!subgraph_node || !name) {
+                return false;
+            }
+
+            var widget = this.getPropertyWidget();
+            var type = this.getEffectivePropertyType();
+            var widget_type = "number";
+            if (type == "boolean") {
+                widget_type = "toggle";
+            } else if (type == "string") {
+                widget_type = "text";
+            }
+            var value;
+
+            if (
+                previous_name &&
+                previous_name != name &&
+                subgraph_node.properties[previous_name] !== undefined
+            ) {
+                value = subgraph_node.properties[previous_name];
+                delete subgraph_node.properties[previous_name];
+            } else if (subgraph_node.properties[name] !== undefined) {
+                value = subgraph_node.properties[name];
+            } else {
+                value = this.properties.value;
+            }
+            value = this.coercePropertyValue(value, type);
+            subgraph_node.properties[name] = value;
+
+            if (!widget) {
+                widget = subgraph_node.addWidget(
+                    widget_type,
+                    name,
+                    value,
+                    name,
+                );
+                widget._property_input_node = this;
+            } else {
+                widget.type = widget_type;
+                widget.name = name;
+                widget.value = value;
+                widget.options.property = name;
+            }
+
+            this.name_in_subgraph = name;
+            subgraph_node.setSize(subgraph_node.computeSize());
+            subgraph_node.setDirtyCanvas(true, true);
+            return true;
+        }
+
+        updateValueWidget() {
+            var type = this.getEffectivePropertyType();
+            this.properties.value = this.coercePropertyValue(
+                this.properties.value,
+                type,
+            );
+            this.value_widget.type = "number";
+            if (type == "boolean") {
+                this.value_widget.type = "toggle";
+            } else if (type == "string") {
+                this.value_widget.type = "text";
+            }
+            this.value_widget.value = this.properties.value;
+        }
+
+        updateType() {
+            var type = this.properties.type || "";
+            this.type_widget.value = type;
+
+            if (this.outputs[0].type != type) {
+                if (!LiteGraph.isValidConnection(this.outputs[0].type, type)) {
+                    this.disconnectOutput(0);
+                }
+                this.outputs[0].type = type;
+            }
+
+            var output_type = String(type).toLowerCase();
+            var has_native_mapping =
+                output_type == "number" ||
+                output_type == "string" ||
+                output_type == "boolean";
+            this.property_type_widget.disabled = has_native_mapping;
+            this.property_type_widget.value = has_native_mapping
+                ? output_type
+                : this.properties.property_type;
+
+            this.updateValueWidget();
+            if (this.properties.name) {
+                this.syncSubgraphWidget();
+            }
+        }
+
+        onPropertyChanged(name, value, previous_value = undefined) {
+            if (name == "name") {
+                if (!this.isPropertyNameAvailable(value)) {
+                    this.name_widget.value = previous_value || "";
+                    return false;
+                }
+                if (
+                    this.getSubgraphNode() &&
+                    !this.syncSubgraphWidget(this.name_in_subgraph)
+                ) {
+                    this.name_widget.value = previous_value || "";
+                    return false;
+                }
+                this.name_widget.value = value;
+                this.name_in_subgraph = value;
+            } else if (name == "type") {
+                return false;
+            } else if (name == "property_type") {
+                if (
+                    value != "number" &&
+                    value != "string" &&
+                    value != "boolean"
+                ) {
+                    this.property_type_widget.value =
+                        previous_value || "number";
+                    return false;
+                }
+                this.updateType();
+            } else if (name == "value") {
+                this.updateValueWidget();
+                if (this.properties.name) {
+                    var subgraph_node = this.getSubgraphNode();
+                    if (
+                        subgraph_node &&
+                        !this.graph._is_configuring_subgraph
+                    ) {
+                        subgraph_node.properties[this.properties.name] =
+                            this.properties.value;
+                    }
+                    this.syncSubgraphWidget();
+                }
+            }
+        }
+
+        setInferredType(type) {
+            this.properties.type = type || "";
+            this.updateType();
+        }
+
+        onConfigure() {
+            var inferred_type = "";
+            var links = this.outputs[0].links;
+            if (links && this.graph) {
+                for (var i = 0; i < links.length; ++i) {
+                    var link_info = this.graph.links[links[i]];
+                    if (!link_info) {
+                        continue;
+                    }
+                    var target = this.graph.getNodeById(link_info.target_id);
+                    var input = target && target.inputs[link_info.target_slot];
+                    inferred_type =
+                        (input && input.type) || link_info.type || "";
+                    if (inferred_type) {
+                        break;
+                    }
+                }
+            }
+            this.setInferredType(inferred_type);
+            if (this.properties.name) {
+                this.syncSubgraphWidget();
+            }
+        }
+
+        hasActiveOutputLinks() {
+            var links = this.outputs[0].links;
+            if (!links || !links.length || !this.graph) {
+                return false;
+            }
+            for (var i = 0; i < links.length; ++i) {
+                if (this.graph.links[links[i]]) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        onConnectionsChange(type, slot, is_connected, link_info) {
+            if (type != LiteGraph.OUTPUT || slot != 0) {
+                return;
+            }
+
+            if (is_connected && link_info) {
+                var target =
+                    this.graph && this.graph.getNodeById(link_info.target_id);
+                var input = target && target.inputs[link_info.target_slot];
+                this.setInferredType((input && input.type) || link_info.type);
+            } else if (!this.hasActiveOutputLinks()) {
+                this.setInferredType("");
+            }
+        }
+
+        onExecute() {
+            var subgraph_node = this.getSubgraphNode();
+            var value = this.properties.value;
+            if (
+                subgraph_node &&
+                subgraph_node.properties[this.properties.name] !== undefined
+            ) {
+                value = subgraph_node.properties[this.properties.name];
+            }
+            this.setOutputData(0, value);
+        }
+
+        onAction() {}
+
+        onRemoved() {
+            var subgraph_node = this.getSubgraphNode();
+            if (!subgraph_node) {
+                return;
+            }
+            var widget = this.getPropertyWidget();
+            if (widget) {
+                var index = subgraph_node.widgets.indexOf(widget);
+                if (index != -1) {
+                    subgraph_node.widgets.splice(index, 1);
+                }
+            }
+            if (
+                !this.graph._is_configuring_subgraph &&
+                this.name_in_subgraph
+            ) {
+                delete subgraph_node.properties[this.name_in_subgraph];
+            }
+            subgraph_node.setSize(subgraph_node.computeSize());
+            subgraph_node.setDirtyCanvas(true, true);
+        }
+    }
+
+    GraphPropertyInput.title = "Property Input";
+    GraphPropertyInput.desc =
+        "Widget-backed input whose type is inherited from its first connection";
+
+    LiteGraph.GraphPropertyInput = GraphPropertyInput;
+    LiteGraph.registerNodeType("graph/property_input", GraphPropertyInput);
 
     //Output for a subgraph
     class GraphOutput {

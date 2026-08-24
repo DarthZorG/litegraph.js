@@ -21,6 +21,14 @@ Try it in the [demo site](https://tamats.com/projects/litegraph/editor).
 - Easy to integrate in any JS application (one single file, no dependencies)
 - TypeScript implementation and declaration support
 
+### Subgraph property inputs
+
+Add a `graph/property_input` node inside a subgraph to expose a value as a
+widget on the containing Subgraph node instead of as an input slot. Its output
+type is inferred from the first connection. Number, string, and boolean
+connections select the matching widget automatically; generic and custom
+connection types expose a `Property type` mapping selector.
+
 ## Nodes provided
 Although it is easy to create new node types, LiteGraph comes with some default nodes that could be useful for many cases:
 - Interface (Widgets)
