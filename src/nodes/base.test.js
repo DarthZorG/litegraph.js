@@ -64,6 +64,71 @@ describe("automatic subgraph input and output nodes", () => {
         expect(graph.inputs.value.type).toBe("");
     });
 
+    test.each(["*", "", 0])(
+        "auto input keeps its concrete type after connecting generic type %p",
+        (genericType) => {
+            const graph = new litegraph.LGraph();
+            const autoInput = LiteGraph.createNode("graph/auto_input");
+            const numberInput = createInputNode(litegraph, "number");
+            const genericInput = createInputNode(litegraph, genericType);
+            const stringInput = createInputNode(litegraph, "string");
+
+            [autoInput, numberInput, genericInput, stringInput].forEach(
+                (node) => graph.add(node)
+            );
+            autoInput.setProperty("name", "value");
+
+            expect(autoInput.connect(0, numberInput, 0)).not.toBeNull();
+            expect(autoInput.connect(0, genericInput, 0)).not.toBeNull();
+            expect(autoInput.outputs[0].type).toBe("number");
+            expect(autoInput.properties.type).toBe("number");
+            expect(graph.inputs.value.type).toBe("number");
+            expect(autoInput.connect(0, stringInput, 0)).toBeNull();
+            expect(autoInput.outputs[0].links).toHaveLength(2);
+
+            numberInput.disconnectInput(0);
+            expect(autoInput.outputs[0].type).toBe("number");
+            genericInput.disconnectInput(0);
+            expect(autoInput.outputs[0].type).toBe("");
+            expect(graph.inputs.value.type).toBe("");
+            expect(autoInput.connect(0, stringInput, 0)).not.toBeNull();
+            expect(autoInput.outputs[0].type).toBe("string");
+        }
+    );
+
+    test("auto input narrows a wildcard and preserves it when restored", () => {
+        const graph = new litegraph.LGraph();
+        const autoInput = LiteGraph.createNode("graph/auto_input");
+        const wildcardInput = createInputNode(litegraph, "*");
+        const numberInput = createInputNode(litegraph, "number");
+        const stringInput = createInputNode(litegraph, "string");
+
+        [autoInput, wildcardInput, numberInput, stringInput].forEach(
+            (node) => graph.add(node)
+        );
+        autoInput.setProperty("name", "value");
+
+        expect(autoInput.connect(0, wildcardInput, 0)).not.toBeNull();
+        expect(autoInput.outputs[0].type).toBe("*");
+        expect(autoInput.connect(0, numberInput, 0)).not.toBeNull();
+        expect(autoInput.outputs[0].type).toBe("number");
+        expect(autoInput.properties.type).toBe("number");
+        expect(graph.inputs.value.type).toBe("number");
+        expect(autoInput.connect(0, stringInput, 0)).toBeNull();
+
+        const restored = new litegraph.LGraph();
+        restored.configure(graph.serialize());
+        const restoredAutoInput = restored.getNodeById(autoInput.id);
+        expect(restoredAutoInput.outputs[0].type).toBe("number");
+        expect(restoredAutoInput.outputs[0].links).toHaveLength(2);
+        expect(restored.inputs.value.type).toBe("number");
+
+        autoInput.disconnectOutput(0);
+        expect(autoInput.outputs[0].type).toBe("");
+        expect(autoInput.properties.type).toBe("");
+        expect(graph.inputs.value.type).toBe("");
+    });
+
     test("auto output inherits, restricts, and resets its type", () => {
         const graph = new litegraph.LGraph();
         const autoOutput = LiteGraph.createNode("graph/auto_output");

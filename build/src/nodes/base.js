@@ -594,10 +594,13 @@
                     }
                     var target = this.graph.getNodeById(link_info.target_id);
                     var input = target && target.inputs[link_info.target_slot];
-                    inferred_type =
-                        (input && input.type) || link_info.type || "";
-                    if (inferred_type) {
+                    var connected_type = (input ? input.type : link_info.type) || "";
+                    if (connected_type && connected_type != "*") {
+                        inferred_type = connected_type;
                         break;
+                    }
+                    if (connected_type == "*") {
+                        inferred_type = "*";
                     }
                 }
             }
@@ -620,9 +623,17 @@
                 return;
             }
             if (is_connected && link_info) {
+                // Once a concrete type is inferred, generic connections must
+                // not loosen it. Normal connection validation rejects conflicts.
+                if (this.properties.type && this.properties.type != "*") {
+                    return;
+                }
                 var target = this.graph && this.graph.getNodeById(link_info.target_id);
                 var input = target && target.inputs[link_info.target_slot];
-                this.setInferredType((input && input.type) || link_info.type);
+                var connected_type = (input ? input.type : link_info.type) || "";
+                if (connected_type || !this.properties.type) {
+                    this.setInferredType(connected_type);
+                }
             }
             else if (!this.hasActiveOutputLinks()) {
                 this.setInferredType("");
