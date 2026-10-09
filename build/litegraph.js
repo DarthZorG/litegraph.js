@@ -742,6 +742,11 @@
             this._nodes_by_id = {};
             this._nodes_in_order = []; //nodes sorted in execution order
             this._nodes_executable = null; //nodes that contain onExecute sorted in execution order
+            this._subgraph_execution_analysis = {
+                cyclicComponents: [],
+                subgraphsToFlatten: [],
+            };
+            this._flattened_execution_plan = null;
             //other scene stuff
             this._groups = [];
             //links
@@ -862,9 +867,12 @@
             //not optimal: executes possible pending actions in node, problem is it is not optimized
             //it is done here as if it was done in the later loop it wont be called in the node missed the onExecute
             //from now on it will iterate only on executable nodes which is faster
-            var nodes = this._nodes_executable
-                ? this._nodes_executable
-                : this._nodes;
+            var flattened_plan = this._flattened_execution_plan;
+            var nodes = flattened_plan
+                ? flattened_plan.steps
+                : this._nodes_executable
+                    ? this._nodes_executable
+                    : this._nodes;
             if (!nodes) {
                 return;
             }
@@ -872,16 +880,28 @@
             if (do_not_catch_errors) {
                 //iterations
                 for (var i = 0; i < num; i++) {
+                    if (flattened_plan) {
+                        this.prepareFlattenedSubgraphSteps(flattened_plan);
+                    }
                     for (var j = 0; j < limit; ++j) {
-                        var node = nodes[j];
-                        if (LiteGraph.use_deferred_actions &&
+                        var step = flattened_plan ? nodes[j] : null;
+                        var node = step ? step.node : nodes[j];
+                        if (!step &&
+                            LiteGraph.use_deferred_actions &&
                             node._waiting_actions &&
                             node._waiting_actions.length)
                             node.executePendingActions();
-                        if (node.mode == LiteGraph.ALWAYS && node.onExecute) {
+                        if (step) {
+                            this.executeFlattenedStep(step, true);
+                        }
+                        else if (node.mode == LiteGraph.ALWAYS &&
+                            node.onExecute) {
                             //wrap node.onExecute();
                             node.doExecute();
                         }
+                    }
+                    if (flattened_plan) {
+                        this.finishFlattenedSubgraphSteps(flattened_plan);
                     }
                     this.fixedtime += this.fixedtime_lapse;
                     if (this.onExecuteStep) {
@@ -897,16 +917,27 @@
                 try {
                     //iterations
                     for (var i = 0; i < num; i++) {
+                        if (flattened_plan) {
+                            this.prepareFlattenedSubgraphSteps(flattened_plan);
+                        }
                         for (var j = 0; j < limit; ++j) {
-                            var node = nodes[j];
-                            if (LiteGraph.use_deferred_actions &&
+                            var step = flattened_plan ? nodes[j] : null;
+                            var node = step ? step.node : nodes[j];
+                            if (!step &&
+                                LiteGraph.use_deferred_actions &&
                                 node._waiting_actions &&
                                 node._waiting_actions.length)
                                 node.executePendingActions();
-                            if (node.mode == LiteGraph.ALWAYS &&
+                            if (step) {
+                                this.executeFlattenedStep(step, false);
+                            }
+                            else if (node.mode == LiteGraph.ALWAYS &&
                                 node.onExecute) {
                                 node.onExecute();
                             }
+                        }
+                        if (flattened_plan) {
+                            this.finishFlattenedSubgraphSteps(flattened_plan);
                         }
                         this.fixedtime += this.fixedtime_lapse;
                         if (this.onExecuteStep) {
@@ -950,6 +981,502 @@
                 if (this._nodes_in_order[i].onExecute) {
                     this._nodes_executable.push(this._nodes_in_order[i]);
                 }
+            }
+            this._subgraph_execution_analysis =
+                this.analyzeSubgraphExecution();
+            this._flattened_execution_plan = this._subgraph_execution_analysis
+                .subgraphsToFlatten.length
+                ? this.computeFlattenedExecutionPlan()
+                : null;
+            if (this._is_subgraph &&
+                this._subgraph_node &&
+                this._subgraph_node.graph) {
+                this._subgraph_node.graph.updateExecutionOrder();
+            }
+        }
+        /**
+         * Finds cycles introduced by treating subgraphs as atomic nodes.
+         *
+         * Subgraphs in a cyclic component are candidates for recursive
+         * flattening. Components without a subgraph are genuine cycles at this
+         * graph level and cannot be resolved by flattening here.
+         */
+        analyzeSubgraphExecution() {
+            var adjacency = new Map();
+            for (var i = 0; i < this._nodes.length; ++i) {
+                adjacency.set(this._nodes[i], []);
+            }
+            for (var i = 0; i < this._nodes.length; ++i) {
+                var node = this._nodes[i];
+                if (!node.outputs) {
+                    continue;
+                }
+                var targets = adjacency.get(node);
+                for (var j = 0; j < node.outputs.length; ++j) {
+                    var output = node.outputs[j];
+                    if (!output || !output.links) {
+                        continue;
+                    }
+                    for (var k = 0; k < output.links.length; ++k) {
+                        var link = this.links[output.links[k]];
+                        if (!link) {
+                            continue;
+                        }
+                        var target = this.getNodeById(link.target_id);
+                        if (target && adjacency.has(target)) {
+                            targets.push(target);
+                        }
+                    }
+                }
+            }
+            var next_index = 0;
+            var indices = new Map();
+            var lowlinks = new Map();
+            var stack = [];
+            var on_stack = new Set();
+            var cyclic_components = [];
+            var visit = (node) => {
+                indices.set(node, next_index);
+                lowlinks.set(node, next_index);
+                next_index += 1;
+                stack.push(node);
+                on_stack.add(node);
+                var targets = adjacency.get(node);
+                for (var i = 0; i < targets.length; ++i) {
+                    var target = targets[i];
+                    if (!indices.has(target)) {
+                        visit(target);
+                        lowlinks.set(node, Math.min(lowlinks.get(node), lowlinks.get(target)));
+                    }
+                    else if (on_stack.has(target)) {
+                        lowlinks.set(node, Math.min(lowlinks.get(node), indices.get(target)));
+                    }
+                }
+                if (lowlinks.get(node) != indices.get(node)) {
+                    return;
+                }
+                var component = [];
+                var member;
+                do {
+                    member = stack.pop();
+                    on_stack.delete(member);
+                    component.push(member);
+                } while (member !== node);
+                var has_self_loop = component.length == 1 &&
+                    adjacency.get(component[0]).indexOf(component[0]) != -1;
+                if (component.length > 1 || has_self_loop) {
+                    cyclic_components.push(component);
+                }
+            };
+            for (var i = 0; i < this._nodes.length; ++i) {
+                if (!indices.has(this._nodes[i])) {
+                    visit(this._nodes[i]);
+                }
+            }
+            var subgraphs_to_flatten = [];
+            for (var i = 0; i < cyclic_components.length; ++i) {
+                var component = cyclic_components[i];
+                for (var j = 0; j < component.length; ++j) {
+                    var node = component[j];
+                    if (node.subgraph instanceof LGraph &&
+                        subgraphs_to_flatten.indexOf(node) == -1) {
+                        subgraphs_to_flatten.push(node);
+                    }
+                }
+            }
+            return {
+                cyclicComponents: cyclic_components,
+                subgraphsToFlatten: subgraphs_to_flatten,
+            };
+        }
+        canFlattenSubgraph(subgraph_node) {
+            if (!subgraph_node || !(subgraph_node.subgraph instanceof LGraph)) {
+                return false;
+            }
+            var input_names = new Set();
+            var output_names = new Set();
+            var inner_nodes = subgraph_node.subgraph._nodes;
+            for (var i = 0; i < inner_nodes.length; ++i) {
+                var inner_node = inner_nodes[i];
+                if (LiteGraph.GraphInput &&
+                    inner_node instanceof LiteGraph.GraphInput) {
+                    input_names.add(inner_node.properties.name);
+                }
+                if (LiteGraph.GraphOutput &&
+                    inner_node instanceof LiteGraph.GraphOutput) {
+                    output_names.add(inner_node.properties.name);
+                }
+            }
+            if (subgraph_node.inputs) {
+                for (var i = 0; i < subgraph_node.inputs.length; ++i) {
+                    var input = subgraph_node.inputs[i];
+                    if (input &&
+                        input.link != null &&
+                        input.name != "enabled" &&
+                        !input_names.has(input.name)) {
+                        return false;
+                    }
+                }
+            }
+            if (subgraph_node.outputs) {
+                for (var i = 0; i < subgraph_node.outputs.length; ++i) {
+                    var output = subgraph_node.outputs[i];
+                    if (output &&
+                        output.links &&
+                        output.links.length &&
+                        !output_names.has(output.name)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        computeFlattenedExecutionPlan() {
+            var flatten = new Set();
+            var initial = this._subgraph_execution_analysis.subgraphsToFlatten;
+            for (var i = 0; i < initial.length; ++i) {
+                if (this.canFlattenSubgraph(initial[i])) {
+                    flatten.add(initial[i]);
+                }
+            }
+            if (!flatten.size) {
+                return null;
+            }
+            var build_plan = () => {
+                var vertices = [];
+                var node_vertices = new Map();
+                var expanded = new Map();
+                var next_order = 0;
+                var add_vertex = (kind, node, owners) => {
+                    var vertex = {
+                        kind: kind,
+                        node: node,
+                        owners: owners,
+                        outgoing: new Set(),
+                        order: next_order++,
+                    };
+                    vertices.push(vertex);
+                    return vertex;
+                };
+                var add_edge = (source, target) => {
+                    if (source && target && source !== target) {
+                        source.outgoing.add(target);
+                    }
+                    else if (source === target) {
+                        source.outgoing.add(target);
+                    }
+                };
+                var expand_graph = (graph, owners) => {
+                    var scope_vertices = [];
+                    for (var i = 0; i < graph._nodes.length; ++i) {
+                        var node = graph._nodes[i];
+                        if (flatten.has(node)) {
+                            var gate = add_vertex("subgraph-gate", node, owners);
+                            var before = vertices.length;
+                            expand_graph(node.subgraph, owners.concat(node));
+                            var inner_vertices = vertices.slice(before);
+                            var info = {
+                                gate: gate,
+                                innerVertices: inner_vertices,
+                                inputs: new Map(),
+                                outputs: new Map(),
+                                owners: owners,
+                            };
+                            expanded.set(node, info);
+                            scope_vertices.push(gate);
+                            for (var j = 0; j < inner_vertices.length; ++j) {
+                                scope_vertices.push(inner_vertices[j]);
+                                add_edge(gate, inner_vertices[j]);
+                            }
+                            for (var j = 0; j < node.subgraph._nodes.length; ++j) {
+                                var boundary_node = node.subgraph._nodes[j];
+                                var boundary_vertex = node_vertices.get(boundary_node);
+                                if (!boundary_vertex) {
+                                    continue;
+                                }
+                                if (LiteGraph.GraphInput &&
+                                    boundary_node instanceof LiteGraph.GraphInput) {
+                                    info.inputs.set(boundary_node.properties.name, boundary_vertex);
+                                }
+                                if (LiteGraph.GraphOutput &&
+                                    boundary_node instanceof
+                                        LiteGraph.GraphOutput) {
+                                    info.outputs.set(boundary_node.properties.name, boundary_vertex);
+                                }
+                            }
+                        }
+                        else {
+                            var vertex = add_vertex("node", node, owners);
+                            node_vertices.set(node, vertex);
+                            scope_vertices.push(vertex);
+                        }
+                    }
+                    var resolve_source = (node, slot) => {
+                        var info = expanded.get(node);
+                        if (!info) {
+                            return node_vertices.get(node);
+                        }
+                        var output = node.outputs && node.outputs[slot];
+                        return output && info.outputs.get(output.name);
+                    };
+                    var resolve_target = (node, slot) => {
+                        var info = expanded.get(node);
+                        if (!info) {
+                            return node_vertices.get(node);
+                        }
+                        var input = node.inputs && node.inputs[slot];
+                        if (!input) {
+                            return null;
+                        }
+                        if (input.name == "enabled") {
+                            return info.gate;
+                        }
+                        return info.inputs.get(input.name);
+                    };
+                    for (var link_id in graph.links) {
+                        var link = graph.links[link_id];
+                        var source_node = graph.getNodeById(link.origin_id);
+                        var target_node = graph.getNodeById(link.target_id);
+                        if (!source_node || !target_node) {
+                            continue;
+                        }
+                        add_edge(resolve_source(source_node, link.origin_slot), resolve_target(target_node, link.target_slot));
+                    }
+                    return scope_vertices;
+                };
+                expand_graph(this, []);
+                return {
+                    vertices: vertices,
+                    expanded: expanded,
+                };
+            };
+            var find_cyclic_components = (vertices) => {
+                var next_index = 0;
+                var indices = new Map();
+                var lowlinks = new Map();
+                var stack = [];
+                var on_stack = new Set();
+                var components = [];
+                var visit = (vertex) => {
+                    indices.set(vertex, next_index);
+                    lowlinks.set(vertex, next_index);
+                    next_index += 1;
+                    stack.push(vertex);
+                    on_stack.add(vertex);
+                    for (var target of vertex.outgoing) {
+                        if (!indices.has(target)) {
+                            visit(target);
+                            lowlinks.set(vertex, Math.min(lowlinks.get(vertex), lowlinks.get(target)));
+                        }
+                        else if (on_stack.has(target)) {
+                            lowlinks.set(vertex, Math.min(lowlinks.get(vertex), indices.get(target)));
+                        }
+                    }
+                    if (lowlinks.get(vertex) != indices.get(vertex)) {
+                        return;
+                    }
+                    var component = [];
+                    var member;
+                    do {
+                        member = stack.pop();
+                        on_stack.delete(member);
+                        component.push(member);
+                    } while (member !== vertex);
+                    if (component.length > 1 ||
+                        component[0].outgoing.has(component[0])) {
+                        components.push(component);
+                    }
+                };
+                for (var i = 0; i < vertices.length; ++i) {
+                    if (!indices.has(vertices[i])) {
+                        visit(vertices[i]);
+                    }
+                }
+                return components;
+            };
+            var built;
+            while (true) {
+                built = build_plan();
+                var components = find_cyclic_components(built.vertices);
+                var added = false;
+                for (var i = 0; i < components.length; ++i) {
+                    for (var j = 0; j < components[i].length; ++j) {
+                        var node = components[i][j].node;
+                        if (node &&
+                            node.subgraph instanceof LGraph &&
+                            !flatten.has(node) &&
+                            this.canFlattenSubgraph(node)) {
+                            flatten.add(node);
+                            added = true;
+                        }
+                    }
+                }
+                if (!added) {
+                    break;
+                }
+            }
+            var indegree = new Map();
+            for (var i = 0; i < built.vertices.length; ++i) {
+                indegree.set(built.vertices[i], 0);
+            }
+            for (var i = 0; i < built.vertices.length; ++i) {
+                for (var target of built.vertices[i].outgoing) {
+                    indegree.set(target, indegree.get(target) + 1);
+                }
+            }
+            var ready = built.vertices.filter((vertex) => indegree.get(vertex) == 0);
+            var ordered = [];
+            var compare_vertices = (a, b) => {
+                var a_priority = a.node.constructor.priority || a.node.priority || 0;
+                var b_priority = b.node.constructor.priority || b.node.priority || 0;
+                return a_priority - b_priority || a.order - b.order;
+            };
+            ready.sort(compare_vertices);
+            while (ready.length) {
+                var vertex = ready.shift();
+                ordered.push(vertex);
+                for (var target of vertex.outgoing) {
+                    indegree.set(target, indegree.get(target) - 1);
+                    if (indegree.get(target) == 0) {
+                        ready.push(target);
+                        ready.sort(compare_vertices);
+                    }
+                }
+            }
+            if (ordered.length != built.vertices.length) {
+                var ordered_set = new Set(ordered);
+                var remaining = built.vertices.filter((vertex) => !ordered_set.has(vertex));
+                remaining.sort(compare_vertices);
+                ordered.push.apply(ordered, remaining);
+            }
+            return {
+                steps: ordered.filter((vertex) => vertex.kind == "subgraph-gate" ||
+                    vertex.node.onExecute),
+                subgraphs: Array.from(built.expanded.keys()),
+            };
+        }
+        isFlattenedStepEnabled(step) {
+            for (var i = 0; i < step.owners.length; ++i) {
+                if (!step.owners[i].enabled) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        executeFlattenedStep(step, use_do_execute) {
+            var node = step.node;
+            if (step.kind == "subgraph-gate") {
+                if (!this.isFlattenedStepEnabled(step)) {
+                    node.enabled = false;
+                    return;
+                }
+                node.enabled = node.getInputOrProperty("enabled");
+                if (node.enabled &&
+                    LiteGraph.use_deferred_actions &&
+                    node._waiting_actions &&
+                    node._waiting_actions.length) {
+                    node.executePendingActions();
+                }
+                return;
+            }
+            if (!this.isFlattenedStepEnabled(step)) {
+                return;
+            }
+            if (this._flattened_execution_plan.failedGraphs.has(node.graph)) {
+                return;
+            }
+            if (LiteGraph.use_deferred_actions &&
+                node._waiting_actions &&
+                node._waiting_actions.length) {
+                node.executePendingActions();
+            }
+            if (node.mode != LiteGraph.ALWAYS || !node.onExecute) {
+                return;
+            }
+            var containing_node = node.graph && node.graph._subgraph_node;
+            if (containing_node &&
+                LiteGraph.GraphInput &&
+                node instanceof LiteGraph.GraphInput) {
+                var input_slot = containing_node.findInputSlot(node.properties.name);
+                if (input_slot != -1) {
+                    node.graph.setInputData(node.properties.name, containing_node.getInputData(input_slot));
+                }
+            }
+            var execute_node = () => {
+                if (use_do_execute) {
+                    node.doExecute();
+                }
+                else {
+                    node.onExecute();
+                }
+            };
+            if (node.graph !== this) {
+                try {
+                    execute_node();
+                    node.graph.errors_in_execution = false;
+                }
+                catch (err) {
+                    node.graph.errors_in_execution = true;
+                    this._flattened_execution_plan.failedGraphs.add(node.graph);
+                    if (LiteGraph.throw_errors) {
+                        throw err;
+                    }
+                    if (LiteGraph.debug) {
+                        console.log("Error during execution: " + err);
+                    }
+                    node.graph.stop();
+                    return;
+                }
+            }
+            else {
+                execute_node();
+            }
+            if (containing_node &&
+                LiteGraph.GraphOutput &&
+                node instanceof LiteGraph.GraphOutput) {
+                var output_slot = containing_node.findOutputSlot(node.properties.name);
+                if (output_slot != -1) {
+                    containing_node.setOutputData(output_slot, node.graph.getOutputData(node.properties.name));
+                }
+            }
+        }
+        prepareFlattenedSubgraphSteps(plan) {
+            var start = LiteGraph.getTime();
+            plan.stepStart = start;
+            plan.failedGraphs = new Set();
+            for (var i = 0; i < plan.subgraphs.length; ++i) {
+                var graph = plan.subgraphs[i].subgraph;
+                graph.globaltime = 0.001 * (start - graph.starttime);
+            }
+        }
+        finishFlattenedSubgraphSteps(plan) {
+            var now = LiteGraph.getTime();
+            var elapsed = now - plan.stepStart;
+            if (elapsed == 0) {
+                elapsed = 1;
+            }
+            for (var i = 0; i < plan.subgraphs.length; ++i) {
+                var subgraph_node = plan.subgraphs[i];
+                if (!subgraph_node.enabled) {
+                    continue;
+                }
+                var graph = subgraph_node.subgraph;
+                graph.fixedtime += graph.fixedtime_lapse;
+                graph.execution_time = 0.001 * elapsed;
+                graph.globaltime += 0.001 * elapsed;
+                graph.elapsed_time =
+                    (now - graph.last_update_time) * 0.001;
+                graph.last_update_time = now;
+                graph.iteration += 1;
+                if (graph.onExecuteStep) {
+                    graph.onExecuteStep();
+                }
+                if (graph.onAfterExecute) {
+                    graph.onAfterExecute();
+                }
+                graph.nodes_executing = [];
+                graph.nodes_actioning = [];
+                graph.nodes_executedAction = [];
             }
         }
         computeExecutionOrder(only_onExecute, set_level) {

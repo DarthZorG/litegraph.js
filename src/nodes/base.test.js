@@ -296,3 +296,234 @@ describe("automatic subgraph input and output nodes", () => {
         expect(restoredWatch.value).toBe(12);
     });
 });
+
+describe("subgraph execution analysis", () => {
+    let litegraph;
+    let LiteGraph;
+
+    function createRelayNode() {
+        const node = new litegraph.LGraphNode();
+        node.addInput("in", "number");
+        node.addOutput("out", "number");
+        return node;
+    }
+
+    function createExecutableNode(name, inputCount, outputCount, execute) {
+        const node = new litegraph.LGraphNode(name);
+        for (let i = 0; i < inputCount; ++i) {
+            node.addInput(`in ${i}`, "number");
+        }
+        for (let i = 0; i < outputCount; ++i) {
+            node.addOutput(`out ${i}`, "number");
+        }
+        node.mode = LiteGraph.ALWAYS;
+        node.onExecute = execute;
+        return node;
+    }
+
+    function addBoundaryNodes(subgraph, inputName, outputName) {
+        const input = LiteGraph.createNode("graph/input");
+        const output = LiteGraph.createNode("graph/output");
+        subgraph.add(input);
+        subgraph.add(output);
+        input.setProperty("name", inputName);
+        output.setProperty("name", outputName);
+        return { input, output };
+    }
+
+    beforeEach(() => {
+        litegraph = loadLiteGraphWithBaseNodes();
+        LiteGraph = litegraph.LiteGraph;
+    });
+
+    test("keeps an acyclic subgraph atomic", () => {
+        const graph = new litegraph.LGraph();
+        const source = createOutputNode(litegraph, "number");
+        const subgraph = LiteGraph.createNode("graph/subgraph");
+        const sink = createInputNode(litegraph, "number");
+
+        subgraph.subgraph.addInput("in", "number");
+        subgraph.subgraph.addOutput("out", "number");
+        graph.add(source);
+        graph.add(subgraph);
+        graph.add(sink);
+        source.connect(0, subgraph, 0);
+        subgraph.connect(0, sink, 0);
+
+        const analysis = graph.analyzeSubgraphExecution();
+
+        expect(analysis.cyclicComponents).toEqual([]);
+        expect(analysis.subgraphsToFlatten).toEqual([]);
+        expect(graph._flattened_execution_plan).toBeNull();
+    });
+
+    test("selects a subgraph in a boundary-induced parent cycle", () => {
+        const graph = new litegraph.LGraph();
+        const subgraph = LiteGraph.createNode("graph/subgraph");
+        const nodeD = createRelayNode();
+        const nodeE = createRelayNode();
+        const downstream = createInputNode(litegraph, "number");
+
+        subgraph.subgraph.addInput("from E", "number");
+        subgraph.subgraph.addOutput("from A", "number");
+        graph.add(subgraph);
+        graph.add(nodeD);
+        graph.add(nodeE);
+        graph.add(downstream);
+        subgraph.connect(0, nodeD, 0);
+        nodeD.connect(0, nodeE, 0);
+        nodeE.connect(0, subgraph, 0);
+        nodeE.connect(0, downstream, 0);
+
+        const analysis = graph.analyzeSubgraphExecution();
+
+        expect(analysis.subgraphsToFlatten).toEqual([subgraph]);
+        expect(
+            graph._subgraph_execution_analysis.subgraphsToFlatten
+        ).toEqual([subgraph]);
+        expect(analysis.cyclicComponents).toHaveLength(1);
+        expect(new Set(analysis.cyclicComponents[0])).toEqual(
+            new Set([subgraph, nodeD, nodeE])
+        );
+        expect(analysis.cyclicComponents[0]).not.toContain(downstream);
+    });
+
+    test("reports a genuine cycle without selecting a subgraph", () => {
+        const graph = new litegraph.LGraph();
+        const first = createRelayNode();
+        const second = createRelayNode();
+
+        graph.add(first);
+        graph.add(second);
+        first.connect(0, second, 0);
+        second.connect(0, first, 0);
+
+        const analysis = graph.analyzeSubgraphExecution();
+
+        expect(analysis.cyclicComponents).toHaveLength(1);
+        expect(new Set(analysis.cyclicComponents[0])).toEqual(
+            new Set([first, second])
+        );
+        expect(analysis.subgraphsToFlatten).toEqual([]);
+    });
+
+    test("interleaves a flattened subgraph with its parent graph", () => {
+        const trace = [];
+        const graph = new litegraph.LGraph();
+        const subgraph = LiteGraph.createNode("graph/subgraph");
+        const nodeA = createExecutableNode("A", 0, 1, function () {
+            trace.push("A");
+            this.setOutputData(0, 1);
+        });
+        const nodeB = createExecutableNode("B", 1, 1, function () {
+            trace.push("B");
+            this.setOutputData(0, this.getInputData(0) + 1);
+        });
+        const nodeC = createExecutableNode("C", 2, 0, function () {
+            trace.push("C");
+            this.value = [this.getInputData(0), this.getInputData(1)];
+        });
+        const nodeD = createExecutableNode("D", 1, 1, function () {
+            trace.push("D");
+            this.setOutputData(0, this.getInputData(0) + 10);
+        });
+        const nodeE = createExecutableNode("E", 1, 1, function () {
+            trace.push("E");
+            this.setOutputData(0, this.getInputData(0) + 100);
+        });
+        const boundary = addBoundaryNodes(
+            subgraph.subgraph,
+            "from E",
+            "from A"
+        );
+
+        subgraph.subgraph.add(nodeA);
+        subgraph.subgraph.add(nodeB);
+        subgraph.subgraph.add(nodeC);
+        nodeA.connect(0, nodeB, 0);
+        nodeB.connect(0, nodeC, 0);
+        nodeA.connect(0, boundary.output, 0);
+        boundary.input.connect(0, nodeC, 1);
+
+        graph.add(subgraph);
+        graph.add(nodeD);
+        graph.add(nodeE);
+        subgraph.connect(0, nodeD, 0);
+        nodeD.connect(0, nodeE, 0);
+        nodeE.connect(0, subgraph, 0);
+
+        expect(graph._flattened_execution_plan).not.toBeNull();
+        graph.runStep(1, true);
+
+        expect(nodeC.value).toEqual([2, 111]);
+        expect(trace.indexOf("A")).toBeLessThan(trace.indexOf("D"));
+        expect(trace.indexOf("D")).toBeLessThan(trace.indexOf("E"));
+        expect(trace.indexOf("E")).toBeLessThan(trace.indexOf("C"));
+        expect(trace).toHaveLength(5);
+
+        nodeE.disconnectOutput(0, subgraph);
+        expect(graph._flattened_execution_plan).toBeNull();
+    });
+
+    test("recursively flattens a nested subgraph only when required", () => {
+        const trace = [];
+        const graph = new litegraph.LGraph();
+        const outer = LiteGraph.createNode("graph/subgraph");
+        const inner = LiteGraph.createNode("graph/subgraph");
+        const outerBoundary = addBoundaryNodes(
+            outer.subgraph,
+            "from E",
+            "from inner"
+        );
+        const innerBoundary = addBoundaryNodes(
+            inner.subgraph,
+            "from outer",
+            "from A"
+        );
+        const nodeA = createExecutableNode("A", 0, 1, function () {
+            trace.push("A");
+            this.setOutputData(0, 3);
+        });
+        const nodeC = createExecutableNode("C", 2, 0, function () {
+            trace.push("C");
+            this.value = [this.getInputData(0), this.getInputData(1)];
+        });
+        const nodeD = createExecutableNode("D", 1, 1, function () {
+            trace.push("D");
+            this.setOutputData(0, this.getInputData(0) + 10);
+        });
+        const nodeE = createExecutableNode("E", 1, 1, function () {
+            trace.push("E");
+            this.setOutputData(0, this.getInputData(0) + 100);
+        });
+
+        inner.subgraph.add(nodeA);
+        inner.subgraph.add(nodeC);
+        nodeA.connect(0, nodeC, 0);
+        nodeA.connect(0, innerBoundary.output, 0);
+        innerBoundary.input.connect(0, nodeC, 1);
+
+        outer.subgraph.add(inner);
+        outerBoundary.input.connect(0, inner, 0);
+        inner.connect(0, outerBoundary.output, 0);
+
+        graph.add(outer);
+        graph.add(nodeD);
+        graph.add(nodeE);
+        outer.connect(0, nodeD, 0);
+        nodeD.connect(0, nodeE, 0);
+        nodeE.connect(0, outer, 0);
+
+        expect(graph._flattened_execution_plan.subgraphs).toEqual(
+            expect.arrayContaining([outer, inner])
+        );
+        graph.runStep();
+
+        expect(nodeC.value).toEqual([3, 113]);
+        expect(trace).toEqual(["A", "D", "E", "C"]);
+
+        outerBoundary.input.disconnectOutput(0, inner);
+        expect(graph._flattened_execution_plan.subgraphs).toContain(outer);
+        expect(graph._flattened_execution_plan.subgraphs).not.toContain(inner);
+    });
+});

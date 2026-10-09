@@ -381,6 +381,8 @@ export declare class LGraph {
         | null;
     /** nodes that contain onExecute */
     private _nodes_in_order: LGraphNode[];
+    private _subgraph_execution_analysis: SubgraphExecutionAnalysis;
+    private _flattened_execution_plan: any;
     private _version: number;
 
     getSupportedTypes(): string[];
@@ -407,6 +409,11 @@ export declare class LGraph {
      * nodes with only inputs.
      */
     updateExecutionOrder(): void;
+    /**
+     * Finds parent-level cycles and the atomic subgraphs that are candidates
+     * for recursive execution-plan flattening.
+     */
+    analyzeSubgraphExecution(): SubgraphExecutionAnalysis;
     /** This is more internal, it computes the executable nodes in order and returns it */
     computeExecutionOrder<T = any>(only_onExecute: boolean, set_level: any): T;
     /**
@@ -556,6 +563,13 @@ export declare class LGraph {
      */
     configure(data: object, keep_old?: boolean): boolean | undefined;
     load(url: string): void;
+}
+
+export interface SubgraphExecutionAnalysis {
+    /** Strongly connected node components that form parent-level cycles. */
+    cyclicComponents: LGraphNode[][];
+    /** Subgraph nodes in those components that should be considered for flattening. */
+    subgraphsToFlatten: LGraphNode[];
 }
 
 export type SerializedLLink = [number, string, number, number, number, number];
